@@ -212,8 +212,8 @@ export default function App() {
           panels: (s.panels || []).map(p => p.id === id ? { 
             ...p, 
             status: 'done', 
-            generatedImages: images,
-            selectedImageIndex: 0,
+            generatedImages: [...(p.generatedImages || []), ...images],
+            selectedImageIndex: (p.generatedImages || []).length,
             usedAssetIds: relevantAssetIds
           } : p)
         };

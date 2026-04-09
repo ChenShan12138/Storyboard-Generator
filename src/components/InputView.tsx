@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { StoryboardPanel, Asset, AssetCategory } from '../types';
 import { Plus, Trash2, Image as ImageIcon, Loader2, ChevronDown, ChevronUp, Table, Settings as SettingsIcon, BookOpen, Download, X, Upload, Search, Check, ChevronRight, Edit3 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -25,6 +25,8 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
   const [isSystemPromptModalOpen, setIsSystemPromptModalOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [activeAssetSelector, setActiveAssetSelector] = useState<string | null>(null);
+  const storyboardUploadRef = useRef<HTMLInputElement>(null);
+  const [uploadingPanelId, setUploadingPanelId] = useState<string | null>(null);
 
   const handleSystemPromptChange = (val: string) => {
     setSystemPrompt(val);
@@ -169,6 +171,48 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
     document.body.removeChild(link);
   };
 
+  const handleUploadStoryboard = (panelId: string) => {
+    setUploadingPanelId(panelId);
+    storyboardUploadRef.current?.click();
+  };
+
+  const onStoryboardFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || !uploadingPanelId) return;
+
+    const newImages: string[] = [];
+    for (const file of Array.from(files) as File[]) {
+      if (!file.type.startsWith('image/')) continue;
+      const reader = new FileReader();
+      const promise = new Promise<string>((resolve) => {
+        reader.onload = (ev) => resolve(ev.target?.result as string);
+      });
+      reader.readAsDataURL(file);
+      newImages.push(await promise);
+    }
+
+    const panel = panels.find(p => p.id === uploadingPanelId);
+    if (panel) {
+      const existing = panel.generatedImages || [];
+      updatePanel(uploadingPanelId, 'generatedImages', [...existing, ...newImages]);
+      updatePanel(uploadingPanelId, 'status', 'done');
+    }
+    
+    e.target.value = '';
+    setUploadingPanelId(null);
+  };
+
+  const deleteGeneratedImage = (panelId: string, imageIndex: number) => {
+    const panel = panels.find(p => p.id === panelId);
+    if (!panel) return;
+    const newImages = [...(panel.generatedImages || [])];
+    newImages.splice(imageIndex, 1);
+    updatePanel(panelId, 'generatedImages', newImages);
+    if (newImages.length === 0) {
+      updatePanel(panelId, 'status', 'idle');
+    }
+  };
+
   const [isAssociating, setIsAssociating] = useState<Record<string, boolean>>({});
 
   const handleIntelligentAssociate = async (panelId: string) => {
@@ -269,42 +313,73 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
                   <td className="p-3">
                     <div className="space-y-3">
                       {(panel.generatedImages || []).length > 0 ? (
-                        <div className="relative group/img rounded-lg overflow-hidden border border-gray-200 shadow-sm aspect-[16/9] bg-gray-50">
-                          <img 
-                            src={panel.generatedImages[panel.selectedImageIndex || 0]} 
-                            alt="Generated" 
-                            className="w-full h-full object-cover cursor-pointer"
-                            onClick={() => setPreviewImage(panel.generatedImages[panel.selectedImageIndex || 0])}
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center space-x-2">
-                            <button
-                              onClick={() => onGenerateSingle(panel.id)}
-                              disabled={panel.status === 'generating'}
-                              className="px-3 py-1.5 bg-white text-gray-900 rounded-md text-[10px] font-bold hover:bg-gray-100 transition-colors flex items-center"
-                            >
-                              <ImageIcon className="w-3 h-3 mr-1" />
-                              {t[lang].regenerate}
-                            </button>
-                            <button
-                              onClick={() => handleDownload(panel.generatedImages[panel.selectedImageIndex || 0], `panel-${panel.sceneShotNumber || index + 1}.png`)}
-                              className="p-1.5 bg-white text-gray-900 rounded-full hover:bg-gray-100 transition-colors"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                        <div className="space-y-3">
+                          {(panel.generatedImages || []).map((img, imgIdx) => (
+                            <div key={imgIdx} className="relative group/img rounded-lg overflow-hidden border border-gray-200 shadow-sm aspect-[16/9] bg-gray-50">
+                              <img 
+                                src={img} 
+                                alt={`Generated ${imgIdx}`} 
+                                className="w-full h-full object-cover cursor-pointer"
+                                onClick={() => setPreviewImage(img)}
+                              />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center space-x-3">
+                                <button
+                                  onClick={() => setPreviewImage(img)}
+                                  className="w-8 h-8 flex items-center justify-center bg-white text-gray-900 rounded-full hover:bg-gray-100 transition-all transform hover:scale-110 shadow-lg"
+                                  title={t[lang].viewLarge}
+                                >
+                                  <Search className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDownload(img, `panel-${panel.sceneShotNumber || index + 1}-${imgIdx + 1}.png`)}
+                                  className="w-8 h-8 flex items-center justify-center bg-white text-gray-900 rounded-full hover:bg-gray-100 transition-all transform hover:scale-110 shadow-lg"
+                                  title={t[lang].download}
+                                >
+                                  <Download className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => deleteGeneratedImage(panel.id, imgIdx)}
+                                  className="w-8 h-8 flex items-center justify-center bg-white text-red-600 rounded-full hover:bg-red-50 transition-all transform hover:scale-110 shadow-lg"
+                                  title={t[lang].deleteImage}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                          <button
+                            onClick={() => onGenerateSingle(panel.id)}
+                            disabled={panel.status === 'generating'}
+                            className="w-full py-2 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors flex items-center justify-center border border-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {panel.status === 'generating' ? (
+                              <><Loader2 className="w-3 h-3 mr-2 animate-spin" /> {t[lang].generating}</>
+                            ) : (
+                              <><ImageIcon className="w-3 h-3 mr-2" /> {t[lang].regenerate}</>
+                            )}
+                          </button>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => onGenerateSingle(panel.id)}
-                          disabled={panel.status === 'generating'}
-                          className="w-full aspect-[16/9] border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-all group/gen"
-                        >
-                          {panel.status === 'generating' ? (
-                            <><Loader2 className="w-6 h-6 mb-2 animate-spin" /> <span className="text-xs">{t[lang].generating}</span></>
-                          ) : (
-                            <><ImageIcon className="w-6 h-6 mb-2 group-hover/gen:scale-110 transition-transform" /> <span className="text-xs font-bold">{t[lang].generateImage}</span></>
-                          )}
-                        </button>
+                        <div className="space-y-2">
+                          <button
+                            onClick={() => onGenerateSingle(panel.id)}
+                            disabled={panel.status === 'generating'}
+                            className="w-full aspect-[16/9] border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-all group/gen disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {panel.status === 'generating' ? (
+                              <><Loader2 className="w-6 h-6 mb-2 animate-spin" /> <span className="text-xs">{t[lang].generating}</span></>
+                            ) : (
+                              <><ImageIcon className="w-6 h-6 mb-2 group-hover/gen:scale-110 transition-transform" /> <span className="text-xs font-bold">{t[lang].generateImage}</span></>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => handleUploadStoryboard(panel.id)}
+                            className="w-full py-2 text-gray-500 hover:text-indigo-600 text-[10px] font-medium flex items-center justify-center transition-colors"
+                          >
+                            <Upload className="w-3 h-3 mr-1" />
+                            {t[lang].uploadStoryboard}
+                          </button>
+                        </div>
                       )}
                       {panel.error && <div className="text-[10px] text-red-600 bg-red-50 p-2 rounded border border-red-100">{panel.error}</div>}
                     </div>
@@ -658,6 +733,15 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
           </div>
         </div>
       )}
+
+      <input 
+        type="file" 
+        ref={storyboardUploadRef} 
+        className="hidden" 
+        accept="image/*" 
+        multiple
+        onChange={onStoryboardFileChange} 
+      />
     </div>
   );
 }
