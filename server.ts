@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import axios from 'axios';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 
 dotenv.config();
 
@@ -170,19 +171,56 @@ async function startServer() {
 
   // Gemini Proxy - Fetch Models
   app.post('/api/gemini/models', async (req, res) => {
-    const { apiKey, baseUrl } = req.body;
+    const { apiKey, baseUrl, proxyEnabled, proxyUrl } = req.body;
     if (!apiKey) return res.status(400).json({ error: 'API Key is required' });
 
     try {
       const finalBaseUrl = baseUrl || 'https://generativelanguage.googleapis.com/v1beta';
+      const agent = proxyEnabled && proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
       const response = await axiosWithRetry({
         method: 'get',
         url: `${finalBaseUrl}/models?key=${apiKey}`,
+        httpsAgent: agent,
+        proxy: false
       });
       res.json(response.data);
     } catch (error: any) {
       console.error('Gemini Models Proxy error:', error.response?.data || error.message);
       res.status(error.response?.status || 500).json(error.response?.data || { error: 'Failed to fetch models' });
+    }
+  });
+
+  // Gemini Proxy - Generate Content
+  app.all('/api/gemini/proxy/:proxyUrl/*', async (req, res) => {
+    const proxyUrl = decodeURIComponent(req.params.proxyUrl);
+    const targetPath = req.params[0];
+    const targetUrl = 'https://generativelanguage.googleapis.com/' + targetPath;
+    
+    try {
+      const agent = proxyUrl && proxyUrl !== 'none' ? new HttpsProxyAgent(proxyUrl) : undefined;
+      
+      const headers = { ...req.headers };
+      delete headers.host;
+      delete headers.origin;
+      delete headers.referer;
+      
+      const response = await axios({
+        method: req.method,
+        url: targetUrl,
+        headers: headers,
+        data: req.body,
+        responseType: 'stream',
+        httpsAgent: agent,
+        proxy: false
+      });
+      response.data.pipe(res);
+    } catch (error: any) {
+      if (error.response) {
+        res.status(error.response.status);
+        error.response.data.pipe(res);
+      } else {
+        res.status(500).json({ error: error.message });
+      }
     }
   });
 

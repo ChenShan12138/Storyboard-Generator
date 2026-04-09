@@ -24,6 +24,8 @@ export function SettingsModal({ isOpen, onClose, lang }: SettingsModalProps) {
   const [nanobananaModel, setNanobananaModel] = useState('');
   const [models, setModels] = useState<string[]>([]);
   const [isFetchingModels, setIsFetchingModels] = useState(false);
+  const [proxyEnabled, setProxyEnabled] = useState(false);
+  const [proxyUrl, setProxyUrl] = useState('http://127.0.0.1:7890');
 
   const [feishuAppId, setFeishuAppId] = useState('');
   const [feishuAppSecret, setFeishuAppSecret] = useState('');
@@ -42,6 +44,8 @@ export function SettingsModal({ isOpen, onClose, lang }: SettingsModalProps) {
       setOpenaiImageSize(localStorage.getItem('openai_image_size') || '1024x1024');
       setNanobananaKey(localStorage.getItem('nanobanana_api_key') || '');
       setNanobananaModel(localStorage.getItem('nanobanana_model') || 'nano-banana');
+      setProxyEnabled(localStorage.getItem('proxy_enabled') === 'true');
+      setProxyUrl(localStorage.getItem('proxy_url') || 'http://127.0.0.1:7890');
       setFeishuAppId(localStorage.getItem('feishu_app_id') || '');
       setFeishuAppSecret(localStorage.getItem('feishu_app_secret') || '');
       
@@ -85,7 +89,9 @@ export function SettingsModal({ isOpen, onClose, lang }: SettingsModalProps) {
           },
           body: JSON.stringify({
             apiKey: geminiKey,
-            baseUrl: geminiBaseUrl
+            baseUrl: geminiBaseUrl,
+            proxyEnabled,
+            proxyUrl
           })
         });
         if (!response.ok) throw new Error('Failed to fetch models');
@@ -191,6 +197,9 @@ export function SettingsModal({ isOpen, onClose, lang }: SettingsModalProps) {
     }
     localStorage.setItem('nanobanana_model', nanobananaModel.trim());
 
+    localStorage.setItem('proxy_enabled', proxyEnabled.toString());
+    localStorage.setItem('proxy_url', proxyUrl.trim());
+
     if (feishuAppId.trim()) {
       localStorage.setItem('feishu_app_id', feishuAppId.trim());
     } else {
@@ -288,12 +297,6 @@ export function SettingsModal({ isOpen, onClose, lang }: SettingsModalProps) {
                           placeholder="gemini-3.1-flash-image-preview"
                         />
                         <datalist id="gemini-models">
-                          <option value="gemini-3.1-flash-image-preview" />
-                          <option value="gemini-2.5-flash-image" />
-                          <option value="gemini-2.0-flash-exp" />
-                          <option value="banana" />
-                          <option value="banana pro" />
-                          <option value="banana2" />
                           {models.map(m => <option key={m} value={m} />)}
                         </datalist>
                       </div>
@@ -338,6 +341,30 @@ export function SettingsModal({ isOpen, onClose, lang }: SettingsModalProps) {
                       <option value="4K">4K</option>
                     </select>
                   </div>
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md border border-gray-200">
+                    <div>
+                      <label className="text-sm font-medium text-gray-900">Enable Proxy</label>
+                      <p className="text-xs text-gray-500">Use a local proxy for Gemini API</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" className="sr-only peer" checked={proxyEnabled} onChange={(e) => setProxyEnabled(e.target.checked)} />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                  </div>
+                  {proxyEnabled && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Proxy URL
+                      </label>
+                      <input
+                        type="text"
+                        value={proxyUrl}
+                        onChange={(e) => setProxyUrl(e.target.value)}
+                        placeholder="http://127.0.0.1:7890"
+                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 

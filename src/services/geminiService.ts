@@ -10,6 +10,8 @@ function getApiConfig() {
     geminiModel: localStorage.getItem('gemini_model') || 'gemini-3.1-flash-image-preview',
     geminiAspectRatio: localStorage.getItem('gemini_aspect_ratio') || '16:9',
     geminiImageSize: localStorage.getItem('gemini_image_size') || '4K',
+    proxyEnabled: localStorage.getItem('proxy_enabled') === 'true',
+    proxyUrl: localStorage.getItem('proxy_url') || 'http://127.0.0.1:7890',
     openaiKey: localStorage.getItem('openai_api_key'),
     openaiBaseUrl: localStorage.getItem('openai_base_url') || 'https://api.openai.com/v1',
     openaiModel: localStorage.getItem('openai_model') || 'dall-e-3',
@@ -26,6 +28,8 @@ export async function associateAssetWithPanel(panel: any, assets: Asset[], retri
   const aiConfig: any = { apiKey: config.geminiKey };
   if (config.geminiBaseUrl) {
     aiConfig.baseUrl = config.geminiBaseUrl;
+  } else if (config.proxyEnabled && config.proxyUrl) {
+    aiConfig.baseUrl = `${window.location.origin}/api/gemini/proxy/${encodeURIComponent(config.proxyUrl)}`;
   }
   const ai = new GoogleGenAI(aiConfig);
 
@@ -93,6 +97,8 @@ export async function selectRelevantAssets(prompt: string, assets: Asset[], retr
   const aiConfig: any = { apiKey: config.geminiKey };
   if (config.geminiBaseUrl) {
     aiConfig.baseUrl = config.geminiBaseUrl;
+  } else if (config.proxyEnabled && config.proxyUrl) {
+    aiConfig.baseUrl = `${window.location.origin}/api/gemini/proxy/${encodeURIComponent(config.proxyUrl)}`;
   }
   const ai = new GoogleGenAI(aiConfig);
   
@@ -272,6 +278,8 @@ export async function generateStoryboardImages(prompt: string, referenceImages: 
     const aiConfig: any = { apiKey: config.geminiKey };
     if (config.geminiBaseUrl) {
       aiConfig.baseUrl = config.geminiBaseUrl;
+    } else if (config.proxyEnabled && config.proxyUrl) {
+      aiConfig.baseUrl = `${window.location.origin}/api/gemini/proxy/${encodeURIComponent(config.proxyUrl)}`;
     }
     const ai = new GoogleGenAI(aiConfig);
     const parts: any[] = [{ text: prompt }];

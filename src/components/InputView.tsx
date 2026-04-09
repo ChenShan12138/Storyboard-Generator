@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { StoryboardPanel, Asset, AssetCategory } from '../types';
-import { Plus, Trash2, Image as ImageIcon, Loader2, ChevronDown, ChevronUp, Table, Settings as SettingsIcon, BookOpen, Download, X, Upload, Search, Check, ChevronRight, Edit3 } from 'lucide-react';
+import { Plus, Trash2, Image as ImageIcon, Loader2, ChevronDown, ChevronUp, Table, Settings as SettingsIcon, BookOpen, Download, X, Upload, Search, Check, ChevronRight, Edit3, Copy } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { Language, t } from '../translations';
 import { ImportModal } from './ImportModal';
@@ -25,6 +25,7 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
   const [isSystemPromptModalOpen, setIsSystemPromptModalOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [activeAssetSelector, setActiveAssetSelector] = useState<string | null>(null);
+  const [copiedPanelId, setCopiedPanelId] = useState<string | null>(null);
 
   const handleSystemPromptChange = (val: string) => {
     setSystemPrompt(val);
@@ -214,7 +215,51 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
     });
   };
 
+  const handleCopyPrompt = (panel: StoryboardPanel) => {
+    const prompt = panel.imagePrompt.trim() || `${panel.coreVisualContent}. ${panel.compositionRequirements}. ${panel.lightingColorStyle}. ${panel.opticalParameters}. ${panel.shotSize}. ${panel.cameraMovement}. Cinematic lighting, storyboard style, detailed.`;
+    const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+    navigator.clipboard.writeText(fullPrompt).then(() => {
+      setCopiedPanelId(panel.id);
+      setTimeout(() => setCopiedPanelId(null), 2000);
+    });
+  };
+
   const [isAssociating, setIsAssociating] = useState<Record<string, boolean>>({});
+  const [isAssociatingAll, setIsAssociatingAll] = useState(false);
+
+  const handleIntelligentAssociateAll = async () => {
+    if (panels.length === 0 || assets.length === 0) return;
+    setIsAssociatingAll(true);
+    try {
+      const { associateAssetWithPanel } = await import('../services/geminiService');
+      
+      for (const panel of panels) {
+        setIsAssociating(prev => ({ ...prev, [panel.id]: true }));
+        try {
+          const results = await associateAssetWithPanel(panel, assets);
+          if (results && results.length > 0) {
+            const associatedAssets = results.map(result => {
+              const asset = assets.find(a => a.id === result.assetId);
+              let image;
+              if (asset && asset.images && asset.images.length > result.imageIndex) {
+                image = asset.images[result.imageIndex];
+              }
+              return { assetId: result.assetId, image };
+            });
+            setPanels(prev => prev.map(p => p.id === panel.id ? { ...p, associatedAssets } : p));
+          }
+        } catch (error) {
+          console.error(`Failed to associate panel ${panel.id}`, error);
+        } finally {
+          setIsAssociating(prev => ({ ...prev, [panel.id]: false }));
+        }
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsAssociatingAll(false);
+    }
+  };
 
   const handleIntelligentAssociate = async (panelId: string) => {
     const panel = panels.find(p => p.id === panelId);
@@ -254,7 +299,7 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
       <div className="flex justify-between items-center border-b border-gray-200 pb-4">
         <h1 className="text-2xl font-bold tracking-tight text-gray-900 flex items-center">
           {t[lang].title}
-          <span className="ml-3 text-xs font-mono text-gray-400 bg-gray-100 px-2 py-1 rounded-full align-middle">v1.0.2</span>
+          <span className="ml-3 text-xs font-mono text-gray-400 bg-gray-100 px-2 py-1 rounded-full align-middle">v1.1.0</span>
         </h1>
         <div className="space-x-3 flex items-center">
           <button
@@ -270,6 +315,14 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
           >
             <Table className="w-4 h-4 mr-2" />
             {t[lang].importTable}
+          </button>
+          <button
+            onClick={handleIntelligentAssociateAll}
+            disabled={isAssociatingAll || panels.length === 0 || assets.length === 0}
+            className="flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 font-medium transition-colors"
+          >
+            {isAssociatingAll ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
+            {lang === 'zh' ? '一键智能关联' : 'Smart Associate All'}
           </button>
           <button
             onClick={onGenerateAll}
@@ -355,31 +408,49 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
                               </div>
                             </div>
                           ))}
-                          <button
-                            onClick={() => onGenerateSingle(panel.id)}
-                            disabled={panel.status === 'generating'}
-                            className="w-full py-2 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors flex items-center justify-center border border-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {panel.status === 'generating' ? (
-                              <><Loader2 className="w-3 h-3 mr-2 animate-spin" /> {t[lang].generating}</>
-                            ) : (
-                              <><ImageIcon className="w-3 h-3 mr-2" /> {t[lang].regenerate}</>
-                            )}
-                          </button>
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => onGenerateSingle(panel.id)}
+                              disabled={panel.status === 'generating'}
+                              className="flex-1 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors flex items-center justify-center border border-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {panel.status === 'generating' ? (
+                                <><Loader2 className="w-3 h-3 mr-2 animate-spin" /> {t[lang].generating}</>
+                              ) : (
+                                <><ImageIcon className="w-3 h-3 mr-2" /> {t[lang].regenerate}</>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleCopyPrompt(panel)}
+                              className="w-10 flex-shrink-0 flex items-center justify-center bg-gray-50 text-gray-600 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200"
+                              title={t[lang].copyPrompt}
+                            >
+                              {copiedPanelId === panel.id ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <div className="space-y-2">
-                          <button
-                            onClick={() => onGenerateSingle(panel.id)}
-                            disabled={panel.status === 'generating'}
-                            className="w-full aspect-[16/9] border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-all group/gen disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {panel.status === 'generating' ? (
-                              <><Loader2 className="w-6 h-6 mb-2 animate-spin" /> <span className="text-xs">{t[lang].generating}</span></>
-                            ) : (
-                              <><ImageIcon className="w-6 h-6 mb-2 group-hover/gen:scale-110 transition-transform" /> <span className="text-xs font-bold">{t[lang].generateImage}</span></>
-                            )}
-                          </button>
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => onGenerateSingle(panel.id)}
+                              disabled={panel.status === 'generating'}
+                              className="flex-1 aspect-[16/9] border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-all group/gen disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {panel.status === 'generating' ? (
+                                <><Loader2 className="w-6 h-6 mb-2 animate-spin" /> <span className="text-xs">{t[lang].generating}</span></>
+                              ) : (
+                                <><ImageIcon className="w-6 h-6 mb-2 group-hover/gen:scale-110 transition-transform" /> <span className="text-xs font-bold">{t[lang].generateImage}</span></>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleCopyPrompt(panel)}
+                              className="w-10 flex-shrink-0 border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-all"
+                              title={t[lang].copyPrompt}
+                            >
+                              {copiedPanelId === panel.id ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                            </button>
+                          </div>
                           <label
                             htmlFor={`upload-storyboard-${panel.id}`}
                             className="w-full py-2 text-gray-500 hover:text-indigo-600 text-[10px] font-medium flex items-center justify-center transition-colors cursor-pointer"
