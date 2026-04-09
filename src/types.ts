@@ -6,6 +6,7 @@ export interface Asset {
   type: AssetType;
   description: string;
   images: string[];
+  showInStoryboard?: boolean;
 }
 
 export interface StoryboardPanel {
@@ -31,6 +32,7 @@ export interface StoryboardPanel {
   usedAssetIds?: string[];
   referenceImages?: string[];
   associatedAssets?: { assetId: string, image?: string }[];
+  showInStoryboard?: boolean;
 }
 
 export interface Script {

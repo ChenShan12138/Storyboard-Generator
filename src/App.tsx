@@ -13,7 +13,7 @@ import { FileVideo, Plus, Trash2, Edit2, Check, PanelLeftClose, PanelLeftOpen } 
 
 export default function App() {
   const [lang, setLang] = useState<Language>('zh');
-  const [view, setView] = useState<'assets' | 'storyboard' | 'view_storyboard'>('assets');
+  const [view, setView] = useState<'assets' | 'storyboard' | 'video' | 'view_storyboard'>('view_storyboard');
   
   const [scripts, setScripts] = useState<Script[]>([]);
   const [currentScriptId, setCurrentScriptId] = useState<string | null>(null);
@@ -300,7 +300,7 @@ export default function App() {
               className={`group flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} p-2 rounded-md cursor-pointer transition-colors ${script.id === currentScriptId ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-100 text-gray-700'}`}
               onClick={() => {
                 setCurrentScriptId(script.id);
-                setView('input');
+                setView('view_storyboard');
               }}
               title={isSidebarCollapsed ? script.name : undefined}
             >
@@ -358,25 +358,34 @@ export default function App() {
         
         {/* Top Navigation Tabs */}
         <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shrink-0">
-          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
-            <button
-              onClick={() => setView('assets')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${view === 'assets' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'}`}
-            >
-              {lang === 'zh' ? '1. 资产' : '1. Assets'}
-            </button>
-            <button
-              onClick={() => setView('storyboard')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${view === 'storyboard' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'}`}
-            >
-              {lang === 'zh' ? '2. 分镜' : '2. Storyboard'}
-            </button>
+          <div className="flex items-center space-x-4">
             <button
               onClick={() => setView('view_storyboard')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${view === 'view_storyboard' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'}`}
+              className={`px-6 py-2 rounded-md text-sm font-bold transition-all ${view === 'view_storyboard' ? 'bg-black text-white shadow-lg scale-105' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
             >
-              {lang === 'zh' ? '3. 分镜预览' : '3. Storyboard View'}
+              {lang === 'zh' ? '分镜板' : 'Storyboard Board'}
             </button>
+            
+            <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+              <button
+                onClick={() => setView('assets')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${view === 'assets' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'}`}
+              >
+                {lang === 'zh' ? '资产' : 'Assets'}
+              </button>
+              <button
+                onClick={() => setView('storyboard')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${view === 'storyboard' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'}`}
+              >
+                {lang === 'zh' ? '分镜' : 'Storyboard'}
+              </button>
+              <button
+                onClick={() => setView('video')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${view === 'video' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'}`}
+              >
+                {lang === 'zh' ? '视频' : 'Video'}
+              </button>
+            </div>
           </div>
           <div className="flex items-center space-x-4">
             <button onClick={toggleLang} className="text-gray-600 hover:text-gray-900 font-medium px-3 py-1">
@@ -428,6 +437,13 @@ export default function App() {
               lang={lang}
               onToggleLang={toggleLang}
             />
+          )}
+          {view === 'video' && (
+            <div className="flex flex-col items-center justify-center h-full text-gray-500 bg-white">
+              <FileVideo className="w-16 h-16 mb-4 text-gray-300" />
+              <h2 className="text-2xl font-semibold mb-2">{lang === 'zh' ? '视频生成' : 'Video Generation'}</h2>
+              <p>{lang === 'zh' ? '此功能即将推出，敬请期待...' : 'Coming soon, stay tuned...'}</p>
+            </div>
           )}
         </div>
       </div>

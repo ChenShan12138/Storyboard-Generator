@@ -21,9 +21,13 @@ export function StoryboardView({ panels, assets, onBack, lang, onToggleLang }: S
     document.body.removeChild(link);
   };
 
+  // Filter panels and assets based on showInStoryboard
+  const filteredPanels = panels.filter(p => p.showInStoryboard !== false);
+  const filteredAssets = assets.filter(a => a.showInStoryboard !== false);
+
   // Group panels by scene
   const scenes: { [key: string]: StoryboardPanel[] } = {};
-  panels.forEach(panel => {
+  filteredPanels.forEach(panel => {
     const sceneKey = panel.sceneTitle || 'SCENE 1';
     if (!scenes[sceneKey]) {
       scenes[sceneKey] = [];
@@ -31,8 +35,8 @@ export function StoryboardView({ panels, assets, onBack, lang, onToggleLang }: S
     scenes[sceneKey].push(panel);
   });
 
-  const characters = assets.filter(a => a.type === 'character');
-  const supplementary = assets.filter(a => a.type !== 'character');
+  const characters = filteredAssets.filter(a => a.type === 'character');
+  const supplementary = filteredAssets.filter(a => a.type !== 'character');
 
   return (
     <div className="min-h-screen bg-black text-white font-sans p-8 selection:bg-indigo-500/30">

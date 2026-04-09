@@ -223,6 +223,7 @@ export function InputView({ panels, setPanels, assets, setAssets, onGenerateAll,
             <thead className="text-xs text-gray-900 bg-gray-100 border-b border-gray-300">
               <tr>
                 <th className="px-2 py-3 border-r border-gray-300 w-10 text-center">#</th>
+                <th className="px-2 py-3 border-r border-gray-300 w-12 text-center">{lang === 'zh' ? '显示' : 'Show'}</th>
                 <th className="px-2 py-3 border-r border-gray-300 w-24">{t[lang].sceneShotNumber}</th>
                 <th className="px-2 py-3 border-r border-gray-300 w-32">{t[lang].sceneTitle}</th>
                 <th className="px-2 py-3 border-r border-gray-300 w-48">{t[lang].sceneDescription}</th>
@@ -249,6 +250,14 @@ export function InputView({ panels, setPanels, assets, setAssets, onGenerateAll,
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
+                  </td>
+                  <td className="px-1 py-2 border-r border-gray-200 text-center align-middle">
+                    <input
+                      type="checkbox"
+                      checked={panel.showInStoryboard !== false}
+                      onChange={(e) => updatePanel(panel.id, 'showInStoryboard', e.target.checked)}
+                      className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                    />
                   </td>
                   <td className="p-0 border-r border-gray-200">
                     <textarea

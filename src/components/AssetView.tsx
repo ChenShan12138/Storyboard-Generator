@@ -180,32 +180,38 @@ export function AssetView({ assets, setAssets, lang }: AssetViewProps) {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    console.log("File change detected", files?.length, "activeAssetId:", activeAssetIdRef.current);
     if (!files || files.length === 0 || !activeAssetIdRef.current) return;
 
-    const newImages: string[] = [];
-    let loadedCount = 0;
     const currentAssetId = activeAssetIdRef.current;
+    const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+    
+    if (imageFiles.length === 0) {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
 
-    Array.from(files).forEach((file: File) => {
+    const newImages: string[] = [];
+    for (let i = 0; i < imageFiles.length; i++) {
+      const file = imageFiles[i];
       const reader = new FileReader();
-      reader.onload = (event) => {
-        const base64 = event.target?.result as string;
-        newImages.push(base64);
-        loadedCount++;
-        
-        if (loadedCount === files.length) {
-          setAssets(prev => prev.map(a => 
-            a.id === currentAssetId 
-              ? { ...a, images: [...a.images, ...newImages] } 
-              : a
-          ));
-        }
-      };
+      const promise = new Promise<string>((resolve) => {
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.onerror = () => resolve('');
+      });
       reader.readAsDataURL(file);
-    });
+      const result = await promise;
+      if (result) newImages.push(result);
+    }
+    
+    if (newImages.length > 0) {
+      setAssets(prev => prev.map(a => 
+        a.id === currentAssetId 
+          ? { ...a, images: [...(a.images || []), ...newImages] } 
+          : a
+      ));
+    }
     
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -232,7 +238,7 @@ export function AssetView({ assets, setAssets, lang }: AssetViewProps) {
     }]);
   };
 
-  const updateAsset = (id: string, field: keyof Asset, value: string) => {
+  const updateAsset = (id: string, field: keyof Asset, value: any) => {
     setAssets(prev => prev.map(a => a.id === id ? { ...a, [field]: value } : a));
   };
 
@@ -356,6 +362,7 @@ export function AssetView({ assets, setAssets, lang }: AssetViewProps) {
               <th className="px-4 py-3 border-r border-gray-200 w-12 text-center">#</th>
               <th className="px-4 py-3 border-r border-gray-200 w-48">{t[lang].assetName}</th>
               <th className="px-4 py-3 border-r border-gray-200 w-32">{t[lang].assetType}</th>
+              <th className="px-4 py-3 border-r border-gray-200 w-24 text-center">{t[lang].showInStoryboard}</th>
               <th className="px-4 py-3 border-r border-gray-200 w-64">{t[lang].assetDescription}</th>
               <th className="px-4 py-3">{t[lang].assetImages}</th>
             </tr>
@@ -399,6 +406,14 @@ export function AssetView({ assets, setAssets, lang }: AssetViewProps) {
                       <option value="prop">{t[lang].assetTypeProp}</option>
                       <option value="other">{t[lang].assetTypeOther}</option>
                     </select>
+                  </td>
+                  <td className="p-2 border-r border-gray-200 align-top text-center">
+                    <input
+                      type="checkbox"
+                      checked={asset.showInStoryboard !== false}
+                      onChange={(e) => updateAsset(asset.id, 'showInStoryboard', e.target.checked)}
+                      className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                    />
                   </td>
                   <td className="p-0 border-r border-gray-200 align-top">
                     <textarea
