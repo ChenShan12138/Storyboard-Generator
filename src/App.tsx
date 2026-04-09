@@ -9,7 +9,8 @@ import { generateStoryboardImages, selectRelevantAssets } from './services/gemin
 import { v4 as uuidv4 } from 'uuid';
 import { Language, t } from './translations';
 import localforage from 'localforage';
-import { FileVideo, Plus, Trash2, Edit2, Check, PanelLeftClose, PanelLeftOpen, Download, Upload } from 'lucide-react';
+import { io, Socket } from 'socket.io-client';
+import { FileVideo, Plus, Trash2, Edit2, Check, PanelLeftClose, PanelLeftOpen, Download, Upload, Share2 } from 'lucide-react';
 
 export default function App() {
   const [lang, setLang] = useState<Language>('zh');
@@ -26,6 +27,19 @@ export default function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isServerHealthy, setIsServerHealthy] = useState(true);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const isRemoteUpdate = React.useRef(false);
+  const lastEmittedScriptRef = React.useRef<string>('');
+
+  // Initialize socket
+  useEffect(() => {
+    const newSocket = io();
+    setSocket(newSocket);
+    return () => {
+      newSocket.close();
+    };
+  }, []);
 
   // Monitor server health
   useEffect(() => {
@@ -43,11 +57,74 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Load scripts from localforage
+  // Load scripts from server or localforage
   useEffect(() => {
     const loadData = async () => {
       try {
-        const savedScripts = await localforage.getItem<Script[]>('storyboard_scripts');
+        let userId = localStorage.getItem('user_id');
+        if (!userId) {
+          userId = uuidv4();
+          localStorage.setItem('user_id', userId);
+        }
+
+        let savedScripts: Script[] | null = null;
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const sharedScriptId = urlParams.get('scriptId');
+
+        if (sharedScriptId) {
+          try {
+            const res = await fetch(`/api/scripts/${sharedScriptId}`);
+            if (res.ok) {
+              const sharedScript = await res.json();
+              if (sharedScript) {
+                savedScripts = [sharedScript];
+              }
+            }
+          } catch (e) {
+            console.error("Failed to load shared script", e);
+          }
+        }
+
+        if (!savedScripts) {
+          try {
+            const res = await fetch(`/api/storage/${userId}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (Array.isArray(data) && data.length > 0) {
+                savedScripts = data;
+              }
+            }
+          } catch (e) {
+            console.error("Failed to load from server", e);
+          }
+        }
+
+        // Fallback to localforage or migrate
+        if (!savedScripts) {
+          savedScripts = await localforage.getItem<Script[]>('storyboard_scripts');
+          if (savedScripts && savedScripts.length > 0) {
+            // Migrate to server
+            fetch(`/api/storage/${userId}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(savedScripts)
+            }).catch(e => console.error("Failed to migrate data", e));
+          }
+        }
+
+        if (sharedScriptId && savedScripts) {
+          // If we loaded a shared script, we need to merge it with local scripts
+          const localScripts = await localforage.getItem<Script[]>('storyboard_scripts') || [];
+          const existingIndex = localScripts.findIndex(s => s.id === sharedScriptId);
+          if (existingIndex >= 0) {
+            localScripts[existingIndex] = savedScripts[0];
+          } else {
+            localScripts.push(savedScripts[0]);
+          }
+          savedScripts = localScripts;
+        }
+
         if (savedScripts && savedScripts.length > 0) {
           const sanitizedScripts = savedScripts.map(script => ({
             ...script,
@@ -58,7 +135,12 @@ export default function App() {
             assets: script.assets || []
           }));
           setScripts(sanitizedScripts);
-          setCurrentScriptId(sanitizedScripts[0].id);
+          
+          if (sharedScriptId && sanitizedScripts.some(s => s.id === sharedScriptId)) {
+            setCurrentScriptId(sharedScriptId);
+          } else {
+            setCurrentScriptId(sanitizedScripts[0].id);
+          }
         } else {
           createNewScript();
         }
@@ -72,12 +154,57 @@ export default function App() {
     loadData();
   }, []);
 
-  // Save scripts to localforage
+  // Save scripts to server and localforage
   useEffect(() => {
     if (!isLoading && scripts.length > 0) {
-      localforage.setItem('storyboard_scripts', scripts).catch(e => console.error("Failed to save scripts", e));
+      localforage.setItem('storyboard_scripts', scripts).catch(e => console.error("Failed to save scripts locally", e));
+      
+      const userId = localStorage.getItem('user_id');
+      if (userId) {
+        fetch(`/api/storage/${userId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(scripts)
+        }).catch(e => console.error("Failed to save scripts to server", e));
+      }
     }
   }, [scripts, isLoading]);
+
+  // Socket.IO sync
+  useEffect(() => {
+    if (socket && currentScriptId) {
+      socket.emit('join-room', currentScriptId);
+
+      const handleScriptUpdated = (updatedScript: Script) => {
+        if (updatedScript.id === currentScriptId) {
+          isRemoteUpdate.current = true;
+          lastEmittedScriptRef.current = JSON.stringify(updatedScript);
+          setScripts(prev => prev.map(s => s.id === updatedScript.id ? updatedScript : s));
+          setTimeout(() => { isRemoteUpdate.current = false; }, 100);
+        }
+      };
+
+      socket.on('script-updated', handleScriptUpdated);
+
+      return () => {
+        socket.off('script-updated', handleScriptUpdated);
+      };
+    }
+  }, [socket, currentScriptId]);
+
+  // Emit local changes
+  useEffect(() => {
+    if (socket && currentScriptId && !isRemoteUpdate.current && !isLoading) {
+      const currentScript = scripts.find(s => s.id === currentScriptId);
+      if (currentScript) {
+        const scriptJson = JSON.stringify(currentScript);
+        if (scriptJson !== lastEmittedScriptRef.current) {
+          lastEmittedScriptRef.current = scriptJson;
+          socket.emit('script-update', { scriptId: currentScriptId, script: currentScript });
+        }
+      }
+    }
+  }, [scripts, currentScriptId, socket, isLoading]);
 
   const createNewScript = () => {
     const newScript: Script = {
@@ -298,6 +425,14 @@ export default function App() {
           setScripts(importedScripts);
           setCurrentScriptId(importedScripts[0].id);
           await localforage.setItem('storyboard_scripts', importedScripts);
+          const userId = localStorage.getItem('user_id');
+          if (userId) {
+            fetch(`/api/storage/${userId}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(importedScripts)
+            }).catch(e => console.error("Failed to save imported scripts to server", e));
+          }
           alert(lang === 'zh' ? '数据导入成功！' : 'Data imported successfully!');
         }
       } catch (error) {
@@ -471,6 +606,24 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center space-x-4">
+            <button
+              onClick={() => {
+                const url = `${window.location.origin}/?scriptId=${currentScriptId}`;
+                navigator.clipboard.writeText(url);
+                alert(lang === 'zh' ? '协作链接已复制到剪贴板！' : 'Collaboration link copied to clipboard!');
+                if (currentScript) {
+                  fetch(`/api/scripts/${currentScriptId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(currentScript)
+                  }).catch(e => console.error("Failed to share script", e));
+                }
+              }}
+              className="flex items-center text-indigo-600 hover:text-indigo-800 font-medium px-3 py-1 bg-indigo-50 rounded-md"
+            >
+              <Share2 className="w-4 h-4 mr-1" />
+              {lang === 'zh' ? '分享协作' : 'Share'}
+            </button>
             <button onClick={toggleLang} className="text-gray-600 hover:text-gray-900 font-medium px-3 py-1">
               {t[lang].langToggle}
             </button>

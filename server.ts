@@ -6,11 +6,30 @@ import axios from 'axios';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import { HttpsProxyAgent } from 'https-proxy-agent';
+import fs from 'fs/promises';
+import http from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const DATA_DIR = path.join(process.cwd(), 'data');
+const SCRIPTS_DIR = path.join(process.cwd(), 'data', 'scripts');
+
+async function ensureDataDir() {
+  try {
+    await fs.access(DATA_DIR);
+  } catch {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+  }
+  try {
+    await fs.access(SCRIPTS_DIR);
+  } catch {
+    await fs.mkdir(SCRIPTS_DIR, { recursive: true });
+  }
+}
 
 // Configure axios defaults
 axios.defaults.timeout = 60000; // 60 seconds
@@ -31,7 +50,12 @@ async function axiosWithRetry(config: any, retries = 2): Promise<any> {
 }
 
 async function startServer() {
+  await ensureDataDir();
   const app = express();
+  const server = http.createServer(app);
+  const io = new SocketIOServer(server, {
+    cors: { origin: '*' }
+  });
   const PORT = 3000;
 
   app.use(express.json({ limit: '50mb' }));
@@ -40,6 +64,105 @@ async function startServer() {
   // Health check
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // Storage API
+  app.get('/api/storage/:userId', async (req, res) => {
+    try {
+      const { userId } = req.params;
+      if (!userId || !/^[a-zA-Z0-9-]+$/.test(userId)) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+      }
+      const filePath = path.join(DATA_DIR, `${userId}.json`);
+      const data = await fs.readFile(filePath, 'utf-8');
+      res.json(JSON.parse(data));
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        res.json([]);
+      } else {
+        res.status(500).json({ error: 'Failed to read data' });
+      }
+    }
+  });
+
+  app.post('/api/storage/:userId', async (req, res) => {
+    try {
+      const { userId } = req.params;
+      if (!userId || !/^[a-zA-Z0-9-]+$/.test(userId)) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+      }
+      const filePath = path.join(DATA_DIR, `${userId}.json`);
+      await fs.writeFile(filePath, JSON.stringify(req.body, null, 2));
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to save data' });
+    }
+  });
+
+  // Shared Scripts API
+  app.get('/api/scripts/:scriptId', async (req, res) => {
+    try {
+      const { scriptId } = req.params;
+      if (!scriptId || !/^[a-zA-Z0-9-]+$/.test(scriptId)) {
+        return res.status(400).json({ error: 'Invalid script ID' });
+      }
+      const filePath = path.join(SCRIPTS_DIR, `${scriptId}.json`);
+      const data = await fs.readFile(filePath, 'utf-8');
+      res.json(JSON.parse(data));
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        res.status(404).json({ error: 'Script not found' });
+      } else {
+        res.status(500).json({ error: 'Failed to read script' });
+      }
+    }
+  });
+
+  app.post('/api/scripts/:scriptId', async (req, res) => {
+    try {
+      const { scriptId } = req.params;
+      if (!scriptId || !/^[a-zA-Z0-9-]+$/.test(scriptId)) {
+        return res.status(400).json({ error: 'Invalid script ID' });
+      }
+      const filePath = path.join(SCRIPTS_DIR, `${scriptId}.json`);
+      await fs.writeFile(filePath, JSON.stringify(req.body, null, 2));
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to save script' });
+    }
+  });
+
+  // Socket.IO logic
+  io.on('connection', (socket) => {
+    console.log('User connected:', socket.id);
+
+    socket.on('join-room', (scriptId) => {
+      Array.from(socket.rooms).forEach(room => {
+        if (room !== socket.id) {
+          socket.leave(room);
+        }
+      });
+      socket.join(`script:${scriptId}`);
+      console.log(`User ${socket.id} joined room script:${scriptId}`);
+    });
+
+    socket.on('script-update', async (data) => {
+      const { scriptId, script } = data;
+      socket.to(`script:${scriptId}`).emit('script-updated', script);
+      
+      try {
+        if (scriptId && /^[a-zA-Z0-9-]+$/.test(scriptId)) {
+          const filePath = path.join(SCRIPTS_DIR, `${scriptId}.json`);
+          await fs.writeFile(filePath, JSON.stringify(script, null, 2));
+        }
+      } catch (e) {
+        console.error('Failed to save script from socket', e);
+      }
+    });
+
+    socket.on('disconnect', () => {
+      console.log('User disconnected:', socket.id);
+    });
   });
 
   // Feishu OAuth URL
@@ -325,7 +448,7 @@ async function startServer() {
     res.status(500).json({ error: 'Internal Server Error', message: err.message });
   });
 
-  app.listen(PORT, '0.0.0.0', () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
