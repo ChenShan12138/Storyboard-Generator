@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Language, t } from '../translations';
 import { ImportModal } from './ImportModal';
 import { motion } from 'motion/react';
+import axios from 'axios';
 
 import { BlobImage } from './BlobImage';
 
@@ -28,6 +29,7 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [activeAssetSelector, setActiveAssetSelector] = useState<string | null>(null);
   const [copiedPanelId, setCopiedPanelId] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
 
   const handleSystemPromptChange = (val: string) => {
     setSystemPrompt(val);
@@ -128,7 +130,8 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
 
   const processFiles = async (panelId: string, files: File[]) => {
     const newImages: string[] = [];
-    for (const file of files) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       if (!file.type.startsWith('image/')) continue;
       const reader = new FileReader();
       const promise = new Promise<string>((resolve) => {
@@ -138,20 +141,28 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
       const base64 = await promise;
       if (base64) {
         try {
-          const res = await fetch('/api/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: base64 })
+          const res = await axios.post('/api/upload', { image: base64 }, {
+            onUploadProgress: (progressEvent) => {
+              if (progressEvent.total) {
+                const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                setUploadProgress(prev => ({ ...prev, [panelId]: percentCompleted }));
+              }
+            }
           });
-          if (res.ok) {
-            const data = await res.json();
-            newImages.push(data.url);
+          if (res.data && res.data.url) {
+            newImages.push(res.data.url);
           } else {
             newImages.push(base64);
           }
         } catch (err) {
           console.error('Upload failed', err);
           newImages.push(base64);
+        } finally {
+          setUploadProgress(prev => {
+            const next = { ...prev };
+            delete next[panelId];
+            return next;
+          });
         }
       }
     }
@@ -637,8 +648,17 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t[lang].referenceImages}</span>
-                        <label className="cursor-pointer text-indigo-600 hover:text-indigo-800 flex items-center text-[10px] bg-indigo-50 px-2 py-0.5 rounded">
-                          <Upload className="w-3 h-3 mr-1" /> {t[lang].uploadReference}
+                        <label className="cursor-pointer text-indigo-600 hover:text-indigo-800 flex items-center text-[10px] bg-indigo-50 px-2 py-0.5 rounded relative overflow-hidden">
+                          {uploadProgress[panel.id] !== undefined ? (
+                            <>
+                              <Loader2 className="w-3 h-3 mr-1 animate-spin" /> {uploadProgress[panel.id]}%
+                              <div className="absolute bottom-0 left-0 h-0.5 bg-indigo-600 transition-all duration-300" style={{ width: `${uploadProgress[panel.id]}%` }} />
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-3 h-3 mr-1" /> {t[lang].uploadReference}
+                            </>
+                          )}
                           <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => handleReferenceUpload(panel.id, e)} />
                         </label>
                       </div>

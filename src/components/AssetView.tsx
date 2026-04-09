@@ -4,6 +4,7 @@ import { Language, t } from '../translations';
 import { Upload, Trash2, Image as ImageIcon, Plus, FileSpreadsheet, Link as LinkIcon, Loader2, X, ChevronDown, ChevronRight, Edit2, Check } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import * as XLSX from 'xlsx';
+import axios from 'axios';
 
 import { BlobImage } from './BlobImage';
 
@@ -25,6 +26,7 @@ export function AssetView({ assets, setAssets, categories, setCategories, lang }
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
 
   const toggleCategory = (id: string) => {
     setExpandedCategories(prev => ({ ...prev, [id]: !prev[id] }));
@@ -88,7 +90,8 @@ export function AssetView({ assets, setAssets, categories, setCategories, lang }
     const imageFiles = (Array.from(files) as File[]).filter(f => f.type.startsWith('image/'));
     
     const newImages: string[] = [];
-    for (const file of imageFiles) {
+    for (let i = 0; i < imageFiles.length; i++) {
+      const file = imageFiles[i];
       const reader = new FileReader();
       const promise = new Promise<string>((resolve) => {
         reader.onload = (e) => resolve(e.target?.result as string);
@@ -98,20 +101,28 @@ export function AssetView({ assets, setAssets, categories, setCategories, lang }
       const base64 = await promise;
       if (base64) {
         try {
-          const res = await fetch('/api/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: base64 })
+          const res = await axios.post('/api/upload', { image: base64 }, {
+            onUploadProgress: (progressEvent) => {
+              if (progressEvent.total) {
+                const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                setUploadProgress(prev => ({ ...prev, [currentAssetId]: percentCompleted }));
+              }
+            }
           });
-          if (res.ok) {
-            const data = await res.json();
-            newImages.push(data.url);
+          if (res.data && res.data.url) {
+            newImages.push(res.data.url);
           } else {
             newImages.push(base64);
           }
         } catch (err) {
           console.error('Upload failed', err);
           newImages.push(base64);
+        } finally {
+          setUploadProgress(prev => {
+            const next = { ...prev };
+            delete next[currentAssetId];
+            return next;
+          });
         }
       }
     }
@@ -145,7 +156,8 @@ export function AssetView({ assets, setAssets, categories, setCategories, lang }
     const imageFiles = (Array.from(files) as File[]).filter(f => f.type.startsWith('image/'));
     
     const newImages: string[] = [];
-    for (const file of imageFiles) {
+    for (let i = 0; i < imageFiles.length; i++) {
+      const file = imageFiles[i];
       const reader = new FileReader();
       const promise = new Promise<string>((resolve) => {
         reader.onload = (e) => resolve(e.target?.result as string);
@@ -154,20 +166,28 @@ export function AssetView({ assets, setAssets, categories, setCategories, lang }
       const base64 = await promise;
       if (base64) {
         try {
-          const res = await fetch('/api/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: base64 })
+          const res = await axios.post('/api/upload', { image: base64 }, {
+            onUploadProgress: (progressEvent) => {
+              if (progressEvent.total) {
+                const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                setUploadProgress(prev => ({ ...prev, [assetId]: percentCompleted }));
+              }
+            }
           });
-          if (res.ok) {
-            const data = await res.json();
-            newImages.push(data.url);
+          if (res.data && res.data.url) {
+            newImages.push(res.data.url);
           } else {
             newImages.push(base64);
           }
         } catch (err) {
           console.error('Upload failed', err);
           newImages.push(base64);
+        } finally {
+          setUploadProgress(prev => {
+            const next = { ...prev };
+            delete next[assetId];
+            return next;
+          });
         }
       }
     }
@@ -315,10 +335,20 @@ export function AssetView({ assets, setAssets, categories, setCategories, lang }
                                 ))}
                                 <button
                                   onClick={() => triggerUpload(asset.id)}
-                                  className="w-24 h-16 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md text-gray-400 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-all"
+                                  className="w-24 h-16 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md text-gray-400 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-all relative overflow-hidden"
                                 >
-                                  <Upload className="w-4 h-4 mb-1" />
-                                  <span className="text-[10px]">{t[lang].uploadImage}</span>
+                                  {uploadProgress[asset.id] !== undefined ? (
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-indigo-50">
+                                      <Loader2 className="w-4 h-4 mb-1 animate-spin text-indigo-600" />
+                                      <span className="text-[10px] text-indigo-600 font-medium">{uploadProgress[asset.id]}%</span>
+                                      <div className="absolute bottom-0 left-0 h-1 bg-indigo-600 transition-all duration-300" style={{ width: `${uploadProgress[asset.id]}%` }} />
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <Upload className="w-4 h-4 mb-1" />
+                                      <span className="text-[10px]">{t[lang].uploadImage}</span>
+                                    </>
+                                  )}
                                 </button>
                               </div>
                             </td>
