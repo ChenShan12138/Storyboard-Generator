@@ -11,6 +11,7 @@ import { Language, t } from './translations';
 import localforage from 'localforage';
 import { io, Socket } from 'socket.io-client';
 import { FileVideo, Plus, Trash2, Edit2, Check, PanelLeftClose, PanelLeftOpen, Download, Upload, Share2 } from 'lucide-react';
+import { debounce } from 'lodash';
 
 export default function App() {
   const [lang, setLang] = useState<Language>('zh');
@@ -154,21 +155,28 @@ export default function App() {
     loadData();
   }, []);
 
-  // Save scripts to server and localforage
-  useEffect(() => {
-    if (!isLoading && scripts.length > 0) {
-      localforage.setItem('storyboard_scripts', scripts).catch(e => console.error("Failed to save scripts locally", e));
+  const saveToServerAndLocal = React.useCallback(
+    debounce((scriptsToSave: Script[]) => {
+      localforage.setItem('storyboard_scripts', scriptsToSave).catch(e => console.error("Failed to save scripts locally", e));
       
       const userId = localStorage.getItem('user_id');
       if (userId) {
         fetch(`/api/storage/${userId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(scripts)
+          body: JSON.stringify(scriptsToSave)
         }).catch(e => console.error("Failed to save scripts to server", e));
       }
+    }, 1000),
+    []
+  );
+
+  // Save scripts to server and localforage
+  useEffect(() => {
+    if (!isLoading && scripts.length > 0) {
+      saveToServerAndLocal(scripts);
     }
-  }, [scripts, isLoading]);
+  }, [scripts, isLoading, saveToServerAndLocal]);
 
   // Socket.IO sync
   useEffect(() => {
@@ -192,19 +200,26 @@ export default function App() {
     }
   }, [socket, currentScriptId]);
 
+  const emitScriptUpdate = React.useCallback(
+    debounce((scriptId: string, script: Script, socket: Socket) => {
+      const scriptJson = JSON.stringify(script);
+      if (scriptJson !== lastEmittedScriptRef.current) {
+        lastEmittedScriptRef.current = scriptJson;
+        socket.emit('script-update', { scriptId, script });
+      }
+    }, 500),
+    []
+  );
+
   // Emit local changes
   useEffect(() => {
     if (socket && currentScriptId && !isRemoteUpdate.current && !isLoading) {
       const currentScript = scripts.find(s => s.id === currentScriptId);
       if (currentScript) {
-        const scriptJson = JSON.stringify(currentScript);
-        if (scriptJson !== lastEmittedScriptRef.current) {
-          lastEmittedScriptRef.current = scriptJson;
-          socket.emit('script-update', { scriptId: currentScriptId, script: currentScript });
-        }
+        emitScriptUpdate(currentScriptId, currentScript, socket);
       }
     }
-  }, [scripts, currentScriptId, socket, isLoading]);
+  }, [scripts, currentScriptId, socket, isLoading, emitScriptUpdate]);
 
   const createNewScript = () => {
     const newScript: Script = {

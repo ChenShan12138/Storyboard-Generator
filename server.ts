@@ -54,11 +54,12 @@ async function startServer() {
   const app = express();
   const server = http.createServer(app);
   const io = new SocketIOServer(server, {
-    cors: { origin: '*' }
+    cors: { origin: '*' },
+    maxHttpBufferSize: 1e8 // 100 MB
   });
   const PORT = 3000;
 
-  app.use(express.json({ limit: '50mb' }));
+  app.use(express.json({ limit: '100mb' }));
   app.use(cookieParser());
 
   // Health check
