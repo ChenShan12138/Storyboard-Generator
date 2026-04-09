@@ -1,0 +1,5 @@
+{
+  "name": "Storyboard Generator",
+  "description": "A tool to generate film/video storyboards using Gemini image generation.",
+  "requestFramePermissions": []
+}
