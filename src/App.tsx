@@ -14,6 +14,9 @@ import { FileVideo, Plus, Trash2, Edit2, Check, PanelLeftClose, PanelLeftOpen, D
 import { debounce } from 'lodash';
 
 export default function App() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const isRescueMode = urlParams.get('rescue') === '1';
+
   const [lang, setLang] = useState<Language>('zh');
   const [view, setView] = useState<'assets' | 'storyboard' | 'video' | 'view_storyboard'>('view_storyboard');
   
@@ -59,46 +62,23 @@ export default function App() {
   }, []);
 
   // Load scripts from server or localforage
+  const WORKSPACE_ID = 'global-workspace';
+
   useEffect(() => {
     const loadData = async () => {
       try {
-        let userId = localStorage.getItem('user_id');
-        if (!userId) {
-          userId = uuidv4();
-          localStorage.setItem('user_id', userId);
-        }
-
         let savedScripts: Script[] | null = null;
         
-        const urlParams = new URLSearchParams(window.location.search);
-        const sharedScriptId = urlParams.get('scriptId');
-
-        if (sharedScriptId) {
-          try {
-            const res = await fetch(`/api/scripts/${sharedScriptId}`);
-            if (res.ok) {
-              const sharedScript = await res.json();
-              if (sharedScript) {
-                savedScripts = [sharedScript];
-              }
+        try {
+          const res = await fetch(`/api/storage/${WORKSPACE_ID}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data) && data.length > 0) {
+              savedScripts = data;
             }
-          } catch (e) {
-            console.error("Failed to load shared script", e);
           }
-        }
-
-        if (!savedScripts) {
-          try {
-            const res = await fetch(`/api/storage/${userId}`);
-            if (res.ok) {
-              const data = await res.json();
-              if (Array.isArray(data) && data.length > 0) {
-                savedScripts = data;
-              }
-            }
-          } catch (e) {
-            console.error("Failed to load from server", e);
-          }
+        } catch (e) {
+          console.error("Failed to load from server", e);
         }
 
         // Fallback to localforage or migrate
@@ -106,24 +86,12 @@ export default function App() {
           savedScripts = await localforage.getItem<Script[]>('storyboard_scripts');
           if (savedScripts && savedScripts.length > 0) {
             // Migrate to server
-            fetch(`/api/storage/${userId}`, {
+            fetch(`/api/storage/${WORKSPACE_ID}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(savedScripts)
             }).catch(e => console.error("Failed to migrate data", e));
           }
-        }
-
-        if (sharedScriptId && savedScripts) {
-          // If we loaded a shared script, we need to merge it with local scripts
-          const localScripts = await localforage.getItem<Script[]>('storyboard_scripts') || [];
-          const existingIndex = localScripts.findIndex(s => s.id === sharedScriptId);
-          if (existingIndex >= 0) {
-            localScripts[existingIndex] = savedScripts[0];
-          } else {
-            localScripts.push(savedScripts[0]);
-          }
-          savedScripts = localScripts;
         }
 
         if (savedScripts && savedScripts.length > 0) {
@@ -136,12 +104,7 @@ export default function App() {
             assets: script.assets || []
           }));
           setScripts(sanitizedScripts);
-          
-          if (sharedScriptId && sanitizedScripts.some(s => s.id === sharedScriptId)) {
-            setCurrentScriptId(sharedScriptId);
-          } else {
-            setCurrentScriptId(sanitizedScripts[0].id);
-          }
+          setCurrentScriptId(sanitizedScripts[0].id);
         } else {
           createNewScript();
         }
@@ -157,16 +120,11 @@ export default function App() {
 
   const saveToServerAndLocal = React.useCallback(
     debounce((scriptsToSave: Script[]) => {
-      localforage.setItem('storyboard_scripts', scriptsToSave).catch(e => console.error("Failed to save scripts locally", e));
-      
-      const userId = localStorage.getItem('user_id');
-      if (userId) {
-        fetch(`/api/storage/${userId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(scriptsToSave)
-        }).catch(e => console.error("Failed to save scripts to server", e));
-      }
+      fetch(`/api/storage/${WORKSPACE_ID}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(scriptsToSave)
+      }).catch(e => console.error("Failed to save scripts to server", e));
     }, 1000),
     []
   );
@@ -180,32 +138,35 @@ export default function App() {
 
   // Socket.IO sync
   useEffect(() => {
-    if (socket && currentScriptId) {
-      socket.emit('join-room', currentScriptId);
+    if (socket) {
+      socket.emit('join-room', WORKSPACE_ID);
 
-      const handleScriptUpdated = (updatedScript: Script) => {
-        if (updatedScript.id === currentScriptId) {
-          isRemoteUpdate.current = true;
-          lastEmittedScriptRef.current = JSON.stringify(updatedScript);
-          setScripts(prev => prev.map(s => s.id === updatedScript.id ? updatedScript : s));
-          setTimeout(() => { isRemoteUpdate.current = false; }, 100);
+      const handleWorkspaceUpdated = (updatedScripts: Script[]) => {
+        isRemoteUpdate.current = true;
+        lastEmittedScriptRef.current = JSON.stringify(updatedScripts);
+        setScripts(updatedScripts);
+        
+        if (currentScriptId && !updatedScripts.some(s => s.id === currentScriptId)) {
+          setCurrentScriptId(updatedScripts[0]?.id || null);
         }
+        
+        setTimeout(() => { isRemoteUpdate.current = false; }, 100);
       };
 
-      socket.on('script-updated', handleScriptUpdated);
+      socket.on('workspace-updated', handleWorkspaceUpdated);
 
       return () => {
-        socket.off('script-updated', handleScriptUpdated);
+        socket.off('workspace-updated', handleWorkspaceUpdated);
       };
     }
   }, [socket, currentScriptId]);
 
   const emitScriptUpdate = React.useCallback(
-    debounce((scriptId: string, script: Script, socket: Socket) => {
-      const scriptJson = JSON.stringify(script);
+    debounce((scriptsToEmit: Script[], socket: Socket) => {
+      const scriptJson = JSON.stringify(scriptsToEmit);
       if (scriptJson !== lastEmittedScriptRef.current) {
         lastEmittedScriptRef.current = scriptJson;
-        socket.emit('script-update', { scriptId, script });
+        socket.emit('workspace-update', scriptsToEmit);
       }
     }, 500),
     []
@@ -213,13 +174,10 @@ export default function App() {
 
   // Emit local changes
   useEffect(() => {
-    if (socket && currentScriptId && !isRemoteUpdate.current && !isLoading) {
-      const currentScript = scripts.find(s => s.id === currentScriptId);
-      if (currentScript) {
-        emitScriptUpdate(currentScriptId, currentScript, socket);
-      }
+    if (socket && !isRemoteUpdate.current && !isLoading && scripts.length > 0) {
+      emitScriptUpdate(scripts, socket);
     }
-  }, [scripts, currentScriptId, socket, isLoading, emitScriptUpdate]);
+  }, [scripts, socket, isLoading, emitScriptUpdate]);
 
   const createNewScript = () => {
     const newScript: Script = {
@@ -458,6 +416,56 @@ export default function App() {
     reader.readAsText(file);
     e.target.value = ''; // Reset input
   };
+
+  if (isRescueMode) {
+    return (
+      <div className="p-8 max-w-2xl mx-auto mt-20 bg-white rounded-xl shadow-lg border border-red-100">
+        <h1 className="text-3xl font-bold text-red-600 mb-4 flex items-center">
+          <Trash2 className="w-8 h-8 mr-3" />
+          数据救援模式 (Rescue Mode)
+        </h1>
+        <p className="mb-6 text-gray-700 leading-relaxed">
+          您的浏览器本地存储可能因为图片过多而导致内存溢出无法正常加载页面。
+          请点击下方按钮下载您的原始数据进行备份，然后清空本地存储以恢复页面正常访问。
+        </p>
+        <div className="flex space-x-4">
+          <button 
+            onClick={async () => {
+              try {
+                const data = await localforage.getItem('storyboard_scripts');
+                const dataStr = JSON.stringify(data);
+                const blob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const linkElement = document.createElement('a');
+                linkElement.setAttribute('href', url);
+                linkElement.setAttribute('download', 'rescued_data.json');
+                linkElement.click();
+                URL.revokeObjectURL(url);
+              } catch (e) {
+                alert('Failed to export data: ' + e);
+              }
+            }}
+            className="flex items-center bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+          >
+            <Download className="w-5 h-5 mr-2" />
+            下载备份数据 (Download Backup)
+          </button>
+          <button 
+            onClick={async () => {
+              if (confirm('警告：此操作将清空所有本地数据！请确保您已经下载了备份。确定要继续吗？\n\nWarning: This will clear all local data! Make sure you have downloaded the backup. Continue?')) {
+                await localforage.clear();
+                window.location.href = '/';
+              }
+            }}
+            className="flex items-center bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition-colors font-medium"
+          >
+            <Trash2 className="w-5 h-5 mr-2" />
+            清空本地存储 (Clear Local Storage)
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading || !currentScript) {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center">Loading...</div>;

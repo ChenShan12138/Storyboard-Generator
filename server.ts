@@ -9,6 +9,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import fs from 'fs/promises';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
+import { v4 as uuidv4 } from 'uuid';
 
 dotenv.config();
 
@@ -17,6 +18,7 @@ const __dirname = path.dirname(__filename);
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const SCRIPTS_DIR = path.join(process.cwd(), 'data', 'scripts');
+const UPLOADS_DIR = path.join(process.cwd(), 'data', 'uploads');
 
 async function ensureDataDir() {
   try {
@@ -28,6 +30,11 @@ async function ensureDataDir() {
     await fs.access(SCRIPTS_DIR);
   } catch {
     await fs.mkdir(SCRIPTS_DIR, { recursive: true });
+  }
+  try {
+    await fs.access(UPLOADS_DIR);
+  } catch {
+    await fs.mkdir(UPLOADS_DIR, { recursive: true });
   }
 }
 
@@ -61,10 +68,33 @@ async function startServer() {
 
   app.use(express.json({ limit: '100mb' }));
   app.use(cookieParser());
+  app.use('/uploads', express.static(UPLOADS_DIR));
 
   // Health check
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // Upload API
+  app.post('/api/upload', async (req, res) => {
+    try {
+      const { image } = req.body;
+      if (!image || !image.startsWith('data:image/')) {
+        return res.status(400).json({ error: 'Invalid image data' });
+      }
+      const matches = image.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+      if (!matches || matches.length !== 3) {
+        return res.status(400).json({ error: 'Invalid base64 format' });
+      }
+      const ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+      const buffer = Buffer.from(matches[2], 'base64');
+      const filename = `${uuidv4()}.${ext}`;
+      await fs.writeFile(path.join(UPLOADS_DIR, filename), buffer);
+      res.json({ url: `/uploads/${filename}` });
+    } catch (error) {
+      console.error('Upload error:', error);
+      res.status(500).json({ error: 'Failed to upload image' });
+    }
   });
 
   // Storage API
@@ -137,14 +167,25 @@ async function startServer() {
   io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
-    socket.on('join-room', (scriptId) => {
+    socket.on('join-room', (roomId) => {
       Array.from(socket.rooms).forEach(room => {
         if (room !== socket.id) {
           socket.leave(room);
         }
       });
-      socket.join(`script:${scriptId}`);
-      console.log(`User ${socket.id} joined room script:${scriptId}`);
+      socket.join(roomId);
+      console.log(`User ${socket.id} joined room ${roomId}`);
+    });
+
+    socket.on('workspace-update', async (scripts) => {
+      socket.to('global-workspace').emit('workspace-updated', scripts);
+      
+      try {
+        const filePath = path.join(DATA_DIR, `global-workspace.json`);
+        await fs.writeFile(filePath, JSON.stringify(scripts, null, 2));
+      } catch (e) {
+        console.error('Failed to save workspace from socket', e);
+      }
     });
 
     socket.on('script-update', async (data) => {

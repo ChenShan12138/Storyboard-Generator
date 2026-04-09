@@ -247,6 +247,24 @@ async function generateNanoBananaImage(prompt: string, config: any, referenceIma
   throw new Error('No image URL returned from Nano Banana. Please check your API key and credits.');
 }
 
+export async function uploadImageToServer(base64Image: string): Promise<string> {
+  if (!base64Image.startsWith('data:image/')) return base64Image;
+  try {
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: base64Image })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.url;
+    }
+  } catch (e) {
+    console.error('Failed to upload image to server', e);
+  }
+  return base64Image;
+}
+
 export async function generateStoryboardImages(prompt: string, referenceImages: string[] = []): Promise<string[]> {
   const config = getApiConfig();
   
@@ -378,6 +396,7 @@ export async function generateStoryboardImages(prompt: string, referenceImages: 
 
   // Generate 1 image
   const img1 = await generateSingleImage();
+  const uploadedUrl = await uploadImageToServer(img1);
 
-  return [img1];
+  return [uploadedUrl];
 }

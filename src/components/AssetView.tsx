@@ -5,6 +5,8 @@ import { Upload, Trash2, Image as ImageIcon, Plus, FileSpreadsheet, Link as Link
 import { v4 as uuidv4 } from 'uuid';
 import * as XLSX from 'xlsx';
 
+import { BlobImage } from './BlobImage';
+
 interface AssetViewProps {
   assets: Asset[];
   setAssets: React.Dispatch<React.SetStateAction<Asset[]>>;
@@ -93,8 +95,25 @@ export function AssetView({ assets, setAssets, categories, setCategories, lang }
         reader.onerror = () => resolve('');
       });
       reader.readAsDataURL(file);
-      const result = await promise;
-      if (result) newImages.push(result);
+      const base64 = await promise;
+      if (base64) {
+        try {
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64 })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            newImages.push(data.url);
+          } else {
+            newImages.push(base64);
+          }
+        } catch (err) {
+          console.error('Upload failed', err);
+          newImages.push(base64);
+        }
+      }
     }
     
     if (newImages.length > 0) {
@@ -132,8 +151,25 @@ export function AssetView({ assets, setAssets, categories, setCategories, lang }
         reader.onload = (e) => resolve(e.target?.result as string);
       });
       reader.readAsDataURL(file);
-      const result = await promise;
-      if (result) newImages.push(result);
+      const base64 = await promise;
+      if (base64) {
+        try {
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64 })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            newImages.push(data.url);
+          } else {
+            newImages.push(base64);
+          }
+        } catch (err) {
+          console.error('Upload failed', err);
+          newImages.push(base64);
+        }
+      }
     }
     
     if (newImages.length > 0) {
@@ -268,7 +304,7 @@ export function AssetView({ assets, setAssets, categories, setCategories, lang }
                               <div className="flex flex-wrap gap-2">
                                 {(asset.images || []).map((img, imgIdx) => (
                                   <div key={imgIdx} className="relative w-24 h-16 bg-gray-100 rounded-md overflow-hidden group/img border border-gray-200 shadow-sm">
-                                    <img src={img} alt="Asset" className="w-full h-full object-cover" />
+                                    <BlobImage src={img} alt="Asset" className="w-full h-full object-cover" />
                                     <button 
                                       onClick={() => removeImage(asset.id, imgIdx)}
                                       className="absolute top-1 right-1 p-1 bg-white/90 rounded shadow-sm text-gray-600 hover:text-red-600 opacity-0 group-hover/img:opacity-100 transition-opacity"

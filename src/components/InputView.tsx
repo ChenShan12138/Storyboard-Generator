@@ -6,6 +6,8 @@ import { Language, t } from '../translations';
 import { ImportModal } from './ImportModal';
 import { motion } from 'motion/react';
 
+import { BlobImage } from './BlobImage';
+
 interface InputViewProps {
   panels: StoryboardPanel[];
   setPanels: React.Dispatch<React.SetStateAction<StoryboardPanel[]>>;
@@ -133,7 +135,25 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
         reader.onload = (e) => resolve(e.target?.result as string);
       });
       reader.readAsDataURL(file);
-      newImages.push(await promise);
+      const base64 = await promise;
+      if (base64) {
+        try {
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64 })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            newImages.push(data.url);
+          } else {
+            newImages.push(base64);
+          }
+        } catch (err) {
+          console.error('Upload failed', err);
+          newImages.push(base64);
+        }
+      }
     }
 
     const panel = panels.find(p => p.id === panelId);
@@ -377,7 +397,7 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
                         <div className="space-y-3">
                           {(panel.generatedImages || []).map((img, imgIdx) => (
                             <div key={imgIdx} className="relative group/img rounded-lg overflow-hidden border border-gray-200 shadow-sm aspect-[16/9] bg-gray-50">
-                              <img 
+                              <BlobImage 
                                 src={img} 
                                 alt={`Generated ${imgIdx}`} 
                                 className="w-full h-full object-cover cursor-pointer"
@@ -504,7 +524,7 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
                           return (
                             <div key={idx} className="group/assoc relative w-12 h-12 bg-gray-100 rounded border border-gray-200 overflow-hidden shadow-sm">
                               {assoc.image ? (
-                                <img src={assoc.image} className="w-full h-full object-cover" />
+                                <BlobImage src={assoc.image} className="w-full h-full object-cover" />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center text-[8px] text-gray-400">NO IMG</div>
                               )}
@@ -567,7 +587,7 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
                                               className={`relative aspect-[4/3] rounded border-2 overflow-hidden cursor-pointer transition-all ${isSelected ? 'border-indigo-600 ring-2 ring-indigo-100' : 'border-gray-100 hover:border-gray-300'}`}
                                             >
                                               {asset.images?.[0] ? (
-                                                <img src={asset.images[0]} className="w-full h-full object-cover" />
+                                                <BlobImage src={asset.images[0]} className="w-full h-full object-cover" />
                                               ) : (
                                                 <div className="w-full h-full flex items-center justify-center bg-gray-50 text-[10px] text-gray-400">NO IMG</div>
                                               )}
@@ -594,7 +614,7 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
                                                     }}
                                                     className={`w-5 h-5 rounded-sm border overflow-hidden cursor-pointer ${selectedAssoc?.image === img ? 'border-indigo-600 ring-1 ring-indigo-600' : 'border-transparent opacity-50 hover:opacity-100'}`}
                                                   >
-                                                    <img src={img} className="w-full h-full object-cover" />
+                                                    <BlobImage src={img} className="w-full h-full object-cover" />
                                                   </div>
                                                 ))}
                                               </div>
@@ -624,7 +644,7 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
                       <div className="flex flex-wrap gap-2">
                         {(panel.referenceImages || []).map((img, idx) => (
                           <div key={idx} className="relative group w-12 h-12 bg-gray-100 rounded border border-gray-200 overflow-hidden shadow-sm">
-                            <img src={img} className="w-full h-full object-cover pointer-events-none" />
+                            <BlobImage src={img} className="w-full h-full object-cover pointer-events-none" />
                             <button onClick={() => removeReferenceImage(panel.id, idx)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                               <X className="w-2.5 h-2.5" />
                             </button>
@@ -816,7 +836,7 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
             >
               <X className="w-6 h-6" />
             </button>
-            <img 
+            <BlobImage 
               src={previewImage} 
               alt="Preview" 
               className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl border border-white/10" 
