@@ -185,7 +185,7 @@ export function AssetView({ assets, setAssets, lang }: AssetViewProps) {
     if (!files || files.length === 0 || !activeAssetIdRef.current) return;
 
     const currentAssetId = activeAssetIdRef.current;
-    const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+    const imageFiles = (Array.from(files) as File[]).filter(f => f.type.startsWith('image/'));
     
     if (imageFiles.length === 0) {
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -278,7 +278,7 @@ export function AssetView({ assets, setAssets, lang }: AssetViewProps) {
 
     const newImages: string[] = [];
     let loadedCount = 0;
-    const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+    const imageFiles = (Array.from(files) as File[]).filter(f => f.type.startsWith('image/'));
     
     if (imageFiles.length === 0) return;
 

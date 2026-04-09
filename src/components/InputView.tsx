@@ -100,7 +100,7 @@ export function InputView({ panels, setPanels, assets, setAssets, onGenerateAll,
     const files = e.dataTransfer.files;
     if (!files || files.length === 0) return;
 
-    const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+    const imageFiles = (Array.from(files) as File[]).filter(f => f.type.startsWith('image/'));
     if (imageFiles.length === 0) return;
 
     const newImages: string[] = [];
