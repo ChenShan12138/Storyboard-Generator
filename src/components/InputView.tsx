@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { StoryboardPanel, Asset, AssetCategory } from '../types';
-import { Plus, Trash2, Image as ImageIcon, Loader2, ChevronDown, ChevronUp, Table, Settings as SettingsIcon, BookOpen, Download, X, Upload, Search, Check, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Image as ImageIcon, Loader2, ChevronDown, ChevronUp, Table, Settings as SettingsIcon, BookOpen, Download, X, Upload, Search, Check, ChevronRight, Edit3 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { Language, t } from '../translations';
 import { ImportModal } from './ImportModal';
+import { motion } from 'motion/react';
 
 interface InputViewProps {
   panels: StoryboardPanel[];
@@ -21,12 +22,67 @@ interface InputViewProps {
 
 export function InputView({ panels, setPanels, assets, setAssets, categories, systemPrompt, setSystemPrompt, onGenerateAll, onGenerateSingle, onGoToStoryboard, lang }: InputViewProps) {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isSystemPromptModalOpen, setIsSystemPromptModalOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [activeAssetSelector, setActiveAssetSelector] = useState<string | null>(null);
 
   const handleSystemPromptChange = (val: string) => {
     setSystemPrompt(val);
   };
+
+  const PROMPT_TEMPLATES = [
+    {
+      id: 'optical',
+      name: t[lang].templateOptical,
+      keywords: 'ARRI ALEXA 65, 35mm Anamorphic, f/2.8, Shallow DOF, Macro, Wide-angle',
+      description: lang === 'zh' ? '摄影机型号、焦段、光圈、镜头类型、深浅。' : 'Camera model, focal length, aperture, lens type, depth of field.'
+    },
+    {
+      id: 'movement',
+      name: t[lang].templateMovement,
+      keywords: 'Slow push-in, Tracking, God\'s eye view, Handheld shake',
+      description: lang === 'zh' ? '摄影机运动轨迹、速度、稳定性。' : 'Camera trajectory, speed, stability.'
+    },
+    {
+      id: 'subject',
+      name: t[lang].templateSubject,
+      keywords: 'Hyper-detailed, intricate textures, specific era (1990s/Modern)',
+      description: lang === 'zh' ? '角色身份、服装材质、具体动作、神态细节。' : 'Character identity, clothing material, specific actions, expression details.'
+    },
+    {
+      id: 'lighting',
+      name: t[lang].templateLighting,
+      keywords: '6500K Cool White, Volumetric lighting, Teal & Orange, High contrast',
+      description: lang === 'zh' ? '光源性质、色温(K)、色彩分级、对比度。' : 'Light source quality, color temperature (K), color grading, contrast.'
+    },
+    {
+      id: 'environment',
+      name: t[lang].templateEnvironment,
+      keywords: 'Marine snow, Fluid dynamics, Buoyancy, Floating debris',
+      description: lang === 'zh' ? '介质(水/雾)、颗粒物、流体交互、重力感。' : 'Medium (water/fog), particles, fluid interaction, gravity.'
+    },
+    {
+      id: 'quality',
+      name: t[lang].templateQuality,
+      keywords: 'IMAX quality, 8k, Fine film grain, Motion blur',
+      description: lang === 'zh' ? '底片质感、分辨率、动态模糊。' : 'Film texture, resolution, motion blur.'
+    },
+    {
+      id: 'negative',
+      name: t[lang].templateNegative,
+      keywords: 'No AI morphing, No flat lighting, No flickering, No cartoonish',
+      description: lang === 'zh' ? '明确禁止的 AI 常见错误。' : 'Common AI errors to avoid.'
+    }
+  ];
+
+  const FULL_STRUCTURE_PROMPT = [
+    `(Camera) ${PROMPT_TEMPLATES.find(t => t.id === 'optical')?.keywords}`,
+    `(Movement) ${PROMPT_TEMPLATES.find(t => t.id === 'movement')?.keywords}`,
+    `(Subject) ${PROMPT_TEMPLATES.find(t => t.id === 'subject')?.keywords}`,
+    `(Lighting) ${PROMPT_TEMPLATES.find(t => t.id === 'lighting')?.keywords}`,
+    `(Environment) ${PROMPT_TEMPLATES.find(t => t.id === 'environment')?.keywords}`,
+    `(Negative) ${PROMPT_TEMPLATES.find(t => t.id === 'negative')?.keywords}`
+  ].join('\n');
 
   const addPanel = () => {
     setPanels([...panels, {
@@ -154,6 +210,13 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">{t[lang].title}</h1>
         <div className="space-x-3 flex items-center">
           <button
+            onClick={() => setIsSystemPromptModalOpen(true)}
+            className="flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 font-medium transition-colors"
+          >
+            <SettingsIcon className="w-4 h-4 mr-2 text-indigo-600" />
+            {t[lang].storyboardGenSettings}
+          </button>
+          <button
             onClick={() => setIsImportModalOpen(true)}
             className="flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 font-medium transition-colors"
           >
@@ -174,23 +237,6 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
           >
             {t[lang].viewStoryboard}
           </button>
-        </div>
-      </div>
-
-      {/* Storyboard Generation Settings */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
-        <h2 className="text-lg font-bold text-gray-900 flex items-center">
-          <SettingsIcon className="w-5 h-5 mr-2 text-indigo-600" />
-          {t[lang].storyboardGenSettings}
-        </h2>
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">{t[lang].systemPrompt}</label>
-          <textarea
-            value={systemPrompt}
-            onChange={(e) => handleSystemPromptChange(e.target.value)}
-            placeholder={lang === 'zh' ? '输入系统提示词以指导 AI 生成...' : 'Enter system prompt to guide AI generation...'}
-            className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none h-24 text-sm"
-          />
         </div>
       </div>
 
@@ -478,6 +524,111 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
           {t[lang].addNew}
         </div>
       </button>
+
+      {/* System Prompt Modal */}
+      {isSystemPromptModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
+          >
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 flex items-center">
+                  <SettingsIcon className="w-5 h-5 mr-2 text-indigo-600" />
+                  {t[lang].storyboardGenSettings}
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">{t[lang].systemPromptDesc}</p>
+              </div>
+              <button 
+                onClick={() => setIsSystemPromptModalOpen(false)}
+                className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+              >
+                <X className="w-6 h-6 text-gray-400" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-8">
+              {/* Prompt Templates Grid */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center">
+                  <BookOpen className="w-4 h-4 mr-2 text-indigo-500" />
+                  {t[lang].promptTemplates}
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {PROMPT_TEMPLATES.map(template => (
+                    <div key={template.id} className="p-4 border border-gray-200 rounded-xl hover:border-indigo-200 hover:bg-indigo-50/30 transition-all group">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="font-bold text-sm text-gray-900">{template.name}</span>
+                        <button 
+                          onClick={() => {
+                            const newPrompt = systemPrompt ? `${systemPrompt}\n${template.keywords}` : template.keywords;
+                            handleSystemPromptChange(newPrompt);
+                          }}
+                          className="text-[10px] font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-tighter bg-indigo-100 px-2 py-0.5 rounded"
+                        >
+                          {t[lang].applyTemplate}
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-gray-500 mb-2 leading-relaxed">{template.description}</p>
+                      <div className="text-[10px] font-mono text-indigo-500 bg-white p-2 rounded border border-indigo-50 leading-normal">
+                        {template.keywords}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Full Template Structure */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center">
+                  <Table className="w-4 h-4 mr-2 text-indigo-500" />
+                  {t[lang].recommendedStructure}
+                </h3>
+                <div className="p-4 bg-gray-900 rounded-xl relative group border border-indigo-500/30 shadow-inner">
+                  <div className="absolute -top-3 left-4 px-2 bg-indigo-600 text-[10px] text-white font-bold rounded uppercase tracking-widest">
+                    {lang === 'zh' ? '一键生成全套提示词' : 'One-click Full Prompt'}
+                  </div>
+                  <code className="text-[11px] text-indigo-300 font-mono leading-relaxed block pr-24 whitespace-pre-wrap">
+                    {FULL_STRUCTURE_PROMPT}
+                  </code>
+                  <button 
+                    onClick={() => handleSystemPromptChange(FULL_STRUCTURE_PROMPT)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 active:scale-95 flex items-center"
+                  >
+                    <Check className="w-4 h-4 mr-2" />
+                    {t[lang].applyFullStructure}
+                  </button>
+                </div>
+              </div>
+
+              {/* System Prompt Input */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center">
+                  <Edit3 className="w-4 h-4 mr-2 text-indigo-500" />
+                  {t[lang].systemPrompt}
+                </h3>
+                <textarea
+                  value={systemPrompt}
+                  onChange={(e) => handleSystemPromptChange(e.target.value)}
+                  placeholder={lang === 'zh' ? '在此输入或从上方模板组合提示词...' : 'Enter your system prompt here or combine from templates above...'}
+                  className="w-full p-4 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-sm h-48 bg-gray-50/30"
+                />
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end">
+              <button
+                onClick={() => setIsSystemPromptModalOpen(false)}
+                className="px-8 py-2.5 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 active:scale-95"
+              >
+                {lang === 'zh' ? '保存并关闭' : 'Save & Close'}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       <ImportModal 
         isOpen={isImportModalOpen} 
