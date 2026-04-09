@@ -107,6 +107,10 @@ export const t = {
     cancel: 'Cancel',
     import: 'Import',
     importSuccess: 'Successfully imported panels',
+    exportData: 'Export Data',
+    importData: 'Import Data',
+    exportDataDesc: 'Backup all scripts and assets to a local file.',
+    importDataDesc: 'Restore scripts and assets from a local backup file.',
 
     // Documentation
     documentation: 'Documentation',
@@ -278,6 +282,10 @@ export const t = {
     cancel: '取消',
     import: '导入',
     importSuccess: '成功导入分镜',
+    exportData: '导出数据',
+    importData: '导入数据',
+    exportDataDesc: '将所有剧本和资产备份到本地文件。',
+    importDataDesc: '从本地备份文件恢复剧本和资产。',
 
     // Documentation
     documentation: '文档说明',

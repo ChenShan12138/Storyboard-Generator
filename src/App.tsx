@@ -9,7 +9,7 @@ import { generateStoryboardImages, selectRelevantAssets } from './services/gemin
 import { v4 as uuidv4 } from 'uuid';
 import { Language, t } from './translations';
 import localforage from 'localforage';
-import { FileVideo, Plus, Trash2, Edit2, Check, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { FileVideo, Plus, Trash2, Edit2, Check, PanelLeftClose, PanelLeftOpen, Download, Upload } from 'lucide-react';
 
 export default function App() {
   const [lang, setLang] = useState<Language>('zh');
@@ -25,6 +25,7 @@ export default function App() {
   const [isDocsOpen, setIsDocsOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isServerHealthy, setIsServerHealthy] = useState(true);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Monitor server health
   useEffect(() => {
@@ -274,6 +275,40 @@ export default function App() {
     setEditingScriptNameId(null);
   };
 
+  const handleExportData = () => {
+    const dataStr = JSON.stringify(scripts);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    const exportFileDefaultName = `storyboard_backup_${new Date().toISOString().slice(0,10)}.json`;
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+  };
+
+  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const importedScripts = JSON.parse(event.target?.result as string) as Script[];
+        if (Array.isArray(importedScripts) && importedScripts.length > 0) {
+          setScripts(importedScripts);
+          setCurrentScriptId(importedScripts[0].id);
+          await localforage.setItem('storyboard_scripts', importedScripts);
+          alert(lang === 'zh' ? '数据导入成功！' : 'Data imported successfully!');
+        }
+      } catch (error) {
+        console.error("Failed to parse imported data", error);
+        alert(lang === 'zh' ? '导入失败，文件格式不正确。' : 'Import failed, invalid file format.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // Reset input
+  };
+
   if (isLoading || !currentScript) {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center">Loading...</div>;
   }
@@ -365,6 +400,34 @@ export default function App() {
               )}
             </div>
           ))}
+        </div>
+
+        {/* Export / Import Section */}
+        <div className={`p-3 border-t border-gray-200 flex flex-col gap-2 ${isSidebarCollapsed ? 'items-center' : ''}`}>
+          <button
+            onClick={handleExportData}
+            className={`flex items-center justify-center p-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors ${isSidebarCollapsed ? '' : 'w-full'}`}
+            title={t[lang].exportDataDesc}
+          >
+            <Download className="w-4 h-4" />
+            {!isSidebarCollapsed && <span className="ml-2 text-sm font-medium">{t[lang].exportData}</span>}
+          </button>
+          
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className={`flex items-center justify-center p-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors ${isSidebarCollapsed ? '' : 'w-full'}`}
+            title={t[lang].importDataDesc}
+          >
+            <Upload className="w-4 h-4" />
+            {!isSidebarCollapsed && <span className="ml-2 text-sm font-medium">{t[lang].importData}</span>}
+          </button>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleImportData} 
+            accept=".json" 
+            className="hidden" 
+          />
         </div>
       </div>
 
