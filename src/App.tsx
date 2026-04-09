@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Script, StoryboardPanel, Asset } from './types';
+import { Script, StoryboardPanel, Asset, AssetCategory } from './types';
 import { InputView } from './components/InputView';
 import { StoryboardView } from './components/StoryboardView';
 import { AssetView } from './components/AssetView';
@@ -101,6 +101,11 @@ export default function App() {
         }
       ],
       assets: [],
+      categories: [
+        { id: uuidv4(), name: lang === 'zh' ? '场景' : 'Scene' },
+        { id: uuidv4(), name: lang === 'zh' ? '角色' : 'Character' },
+        { id: uuidv4(), name: lang === 'zh' ? '道具' : 'Prop' }
+      ],
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
@@ -117,6 +122,11 @@ export default function App() {
         name: t[lang].untitledScript,
         panels: [],
         assets: [],
+        categories: [
+          { id: uuidv4(), name: lang === 'zh' ? '场景' : 'Scene' },
+          { id: uuidv4(), name: lang === 'zh' ? '角色' : 'Character' },
+          { id: uuidv4(), name: lang === 'zh' ? '道具' : 'Prop' }
+        ],
         createdAt: Date.now(),
         updatedAt: Date.now()
       };
@@ -136,6 +146,10 @@ export default function App() {
     setScripts(prev => (prev || []).map(s => s.id === currentScriptId ? { ...s, ...updates, updatedAt: Date.now() } : s));
   };
 
+  const handleUpdateScript = (updatedScript: Script) => {
+    setScripts(prev => (prev || []).map(s => s.id === updatedScript.id ? updatedScript : s));
+  };
+
   const handleSetPanels = (action: React.SetStateAction<StoryboardPanel[]>) => {
     if (!currentScript) return;
     const newPanels = typeof action === 'function' ? action(currentScript.panels || []) : action;
@@ -146,6 +160,12 @@ export default function App() {
     if (!currentScript) return;
     const newAssets = typeof action === 'function' ? action(currentScript.assets || []) : action;
     updateCurrentScript({ assets: newAssets });
+  };
+
+  const handleSetCategories = (action: React.SetStateAction<AssetCategory[]>) => {
+    if (!currentScript) return;
+    const newCategories = typeof action === 'function' ? action(currentScript.categories || []) : action;
+    updateCurrentScript({ categories: newCategories });
   };
 
   const currentScript = scripts.find(s => s.id === currentScriptId);
@@ -411,6 +431,8 @@ export default function App() {
             <AssetView 
               assets={currentScript.assets || []}
               setAssets={handleSetAssets}
+              categories={currentScript.categories || []}
+              setCategories={handleSetCategories}
               lang={lang}
             />
           )}
@@ -420,19 +442,20 @@ export default function App() {
               setPanels={handleSetPanels} 
               assets={currentScript.assets || []}
               setAssets={handleSetAssets}
+              categories={currentScript.categories || []}
+              systemPrompt={currentScript.systemPrompt || ''}
+              setSystemPrompt={(val) => handleUpdateScript({ ...currentScript, systemPrompt: val })}
               onGenerateAll={handleGenerateAll}
               onGenerateSingle={handleGenerateSingle}
               onGoToStoryboard={() => setView('view_storyboard')}
               lang={lang}
-              onToggleLang={toggleLang}
-              onOpenSettings={() => setIsSettingsOpen(true)}
-              onOpenDocs={() => setIsDocsOpen(true)}
             />
           )}
           {view === 'view_storyboard' && (
             <StoryboardView 
               panels={currentScript.panels || []}
               assets={currentScript.assets || []}
+              categories={currentScript.categories || []}
               onBack={() => setView('storyboard')}
               lang={lang}
               onToggleLang={toggleLang}

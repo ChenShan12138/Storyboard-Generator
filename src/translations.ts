@@ -150,6 +150,12 @@ export const t = {
     nanobananaProHint: 'For Nano Banana Pro, select or type "nano-banana-pro".',
     referenceImages: 'Reference Images',
     uploadReference: 'Upload Reference',
+    storyboardGenSettings: 'Storyboard Generation Settings',
+    systemPrompt: 'System Prompt',
+    additionalNotes: 'Additional Notes',
+    reference: 'Reference',
+    generateImage: 'Generate Image',
+    regenerate: 'Regenerate',
   },
   zh: {
     title: '分镜板生成器',
@@ -300,5 +306,11 @@ export const t = {
     nanobananaProHint: '如需使用 Nano Banana Pro，请选择或输入 "nano-banana-pro"。',
     referenceImages: '参考图',
     uploadReference: '上传参考图',
+    storyboardGenSettings: '分镜生成设置',
+    systemPrompt: '系统提示词',
+    additionalNotes: '补充备注',
+    reference: '参考',
+    generateImage: '生成图片',
+    regenerate: '重新生成',
   }
 };

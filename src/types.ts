@@ -1,9 +1,12 @@
-export type AssetType = 'scene' | 'character' | 'prop' | 'other';
+export interface AssetCategory {
+  id: string;
+  name: string;
+}
 
 export interface Asset {
   id: string;
   name: string;
-  type: AssetType;
+  categoryId: string;
   description: string;
   images: string[];
   showInStoryboard?: boolean;
@@ -40,6 +43,8 @@ export interface Script {
   name: string;
   panels: StoryboardPanel[];
   assets: Asset[];
+  categories: AssetCategory[];
+  systemPrompt?: string;
   createdAt: number;
   updatedAt: number;
 }

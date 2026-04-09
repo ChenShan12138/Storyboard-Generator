@@ -32,7 +32,6 @@ export async function associateAssetWithPanel(panel: any, assets: Asset[], retri
   const assetList = assets.map(a => ({
     id: a.id,
     name: a.name,
-    type: a.type,
     description: a.description,
     imageCount: a.images?.length || 0
   }));

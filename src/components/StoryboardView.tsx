@@ -1,17 +1,18 @@
 import React from 'react';
-import { StoryboardPanel, Asset } from '../types';
+import { StoryboardPanel, Asset, AssetCategory } from '../types';
 import { ArrowLeft, Printer, Download } from 'lucide-react';
 import { Language, t } from '../translations';
 
 interface StoryboardViewProps {
   panels: StoryboardPanel[];
   assets: Asset[];
+  categories: AssetCategory[];
   onBack: () => void;
   lang: Language;
   onToggleLang: () => void;
 }
 
-export function StoryboardView({ panels, assets, onBack, lang, onToggleLang }: StoryboardViewProps) {
+export function StoryboardView({ panels, assets, categories, onBack, lang, onToggleLang }: StoryboardViewProps) {
   const handleDownload = (imageUrl: string, filename: string) => {
     const link = document.createElement('a');
     link.href = imageUrl;
@@ -34,9 +35,6 @@ export function StoryboardView({ panels, assets, onBack, lang, onToggleLang }: S
     }
     scenes[sceneKey].push(panel);
   });
-
-  const characters = filteredAssets.filter(a => a.type === 'character');
-  const supplementary = filteredAssets.filter(a => a.type !== 'character');
 
   return (
     <div className="min-h-screen bg-black text-white font-sans p-8 selection:bg-indigo-500/30">
@@ -71,54 +69,35 @@ export function StoryboardView({ panels, assets, onBack, lang, onToggleLang }: S
         </p>
       </div>
 
-      {/* CHARACTER Section */}
-      {characters.length > 0 && (
-        <section className="mb-16">
-          <h2 className="text-sm font-medium tracking-widest uppercase text-gray-400 mb-6 border-l-2 border-indigo-500 pl-3">
-            CHARACTER
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {characters.map(asset => (
-              <div key={asset.id} className="space-y-3">
-                <div className="aspect-[16/9] bg-gray-900 rounded overflow-hidden border border-gray-800">
-                  {asset.images?.[0] ? (
-                    <img src={asset.images[0]} alt={asset.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-700 text-xs">NO IMAGE</div>
-                  )}
+      {/* Assets Sections by Category */}
+      {categories.map(category => {
+        const categoryAssets = filteredAssets.filter(a => a.categoryId === category.id);
+        if (categoryAssets.length === 0) return null;
+        return (
+          <section key={category.id} className="mb-16">
+            <h2 className="text-sm font-medium tracking-widest uppercase text-gray-400 mb-6 border-l-2 border-indigo-500 pl-3">
+              {category.name.toUpperCase()}
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
+              {categoryAssets.map(asset => (
+                <div key={asset.id} className="space-y-3">
+                  <div className="aspect-[16/9] bg-gray-900 rounded overflow-hidden border border-gray-800">
+                    {asset.images?.[0] ? (
+                      <img src={asset.images[0]} alt={asset.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-700 text-xs uppercase tracking-tighter">NO IMAGE</div>
+                    )}
+                  </div>
+                  <p className="text-center text-[10px] text-gray-400 tracking-widest uppercase truncate px-1">{asset.name}</p>
                 </div>
-                <p className="text-center text-xs text-gray-300 tracking-wider">{asset.name}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* SUPPLEMENTARY Section */}
-      {supplementary.length > 0 && (
-        <section className="mb-24">
-          <h2 className="text-sm font-medium tracking-widest uppercase text-gray-400 mb-6 border-l-2 border-indigo-500 pl-3">
-            SUPPLEMENTARY
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {supplementary.map(asset => (
-              <div key={asset.id} className="space-y-3">
-                <div className="aspect-[16/9] bg-gray-900 rounded overflow-hidden border border-gray-800">
-                  {asset.images?.[0] ? (
-                    <img src={asset.images[0]} alt={asset.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-700 text-xs">NO IMAGE</div>
-                  )}
-                </div>
-                <p className="text-center text-xs text-gray-300 tracking-wider">{asset.name}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+              ))}
+            </div>
+          </section>
+        );
+      })}
 
       {/* STORYBOARD Section */}
-      <section>
+      <section className="mt-24">
         <h2 className="text-sm font-medium tracking-widest uppercase text-gray-400 mb-12 border-l-2 border-indigo-500 pl-3">
           STORYBOARD
         </h2>
@@ -171,13 +150,34 @@ export function StoryboardView({ panels, assets, onBack, lang, onToggleLang }: S
                         </div>
                       )}
                     </div>
-                    <div className="space-y-2">
-                      <h4 className="text-[10px] font-bold tracking-[0.2em] uppercase text-gray-500">
-                        SHOT {panel.sceneShotNumber || pIdx + 1}
-                      </h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-start">
+                        <h4 className="text-[10px] font-bold tracking-[0.2em] uppercase text-gray-500">
+                          SHOT {panel.sceneShotNumber || pIdx + 1}
+                        </h4>
+                      </div>
                       <p className="text-xs text-gray-300 leading-relaxed line-clamp-4">
                         {panel.coreVisualContent}
                       </p>
+                      
+                      {/* Associated Assets in Storyboard Board */}
+                      {(panel.associatedAssets || []).length > 0 && (
+                        <div className="flex flex-wrap gap-1 pt-2 border-t border-gray-800">
+                          {panel.associatedAssets!.map((assoc, aIdx) => {
+                            const asset = assets.find(a => a.id === assoc.assetId);
+                            if (!asset) return null;
+                            return (
+                              <div key={aIdx} className="w-8 h-8 rounded bg-gray-900 border border-gray-800 overflow-hidden" title={asset.name}>
+                                {assoc.image ? (
+                                  <img src={assoc.image} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-[6px] text-gray-600">?</div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
