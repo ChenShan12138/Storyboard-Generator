@@ -25,8 +25,6 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
   const [isSystemPromptModalOpen, setIsSystemPromptModalOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [activeAssetSelector, setActiveAssetSelector] = useState<string | null>(null);
-  const storyboardUploadRef = useRef<HTMLInputElement>(null);
-  const [uploadingPanelId, setUploadingPanelId] = useState<string | null>(null);
 
   const handleSystemPromptChange = (val: string) => {
     setSystemPrompt(val);
@@ -107,7 +105,11 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
   };
 
   const updatePanel = (id: string, field: keyof StoryboardPanel, value: any) => {
-    setPanels(panels.map(p => p.id === id ? { ...p, [field]: value } : p));
+    setPanels(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
+  };
+
+  const updatePanelMultiple = (id: string, updates: Partial<StoryboardPanel>) => {
+    setPanels(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
   };
 
   const removePanel = (id: string) => {
@@ -171,17 +173,9 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
     document.body.removeChild(link);
   };
 
-  const handleUploadStoryboard = (panelId: string) => {
-    setUploadingPanelId(panelId);
-    storyboardUploadRef.current?.click();
-  };
-
-  const onStoryboardFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || !uploadingPanelId) return;
-
+  const processStoryboardFiles = async (panelId: string, files: File[]) => {
     const newImages: string[] = [];
-    for (const file of Array.from(files) as File[]) {
+    for (const file of files) {
       if (!file.type.startsWith('image/')) continue;
       const reader = new FileReader();
       const promise = new Promise<string>((resolve) => {
@@ -191,15 +185,22 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
       newImages.push(await promise);
     }
 
-    const panel = panels.find(p => p.id === uploadingPanelId);
+    const panel = panels.find(p => p.id === panelId);
     if (panel) {
       const existing = panel.generatedImages || [];
-      updatePanel(uploadingPanelId, 'generatedImages', [...existing, ...newImages]);
-      updatePanel(uploadingPanelId, 'status', 'done');
+      updatePanelMultiple(panelId, {
+        generatedImages: [...existing, ...newImages],
+        status: 'done'
+      });
     }
-    
-    e.target.value = '';
-    setUploadingPanelId(null);
+  };
+
+  const handleStoryboardDrop = async (e: React.DragEvent, panelId: string) => {
+    e.preventDefault();
+    const files = Array.from(e.dataTransfer.files) as File[];
+    if (files.length > 0) {
+      await processStoryboardFiles(panelId, files);
+    }
   };
 
   const deleteGeneratedImage = (panelId: string, imageIndex: number) => {
@@ -207,10 +208,10 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
     if (!panel) return;
     const newImages = [...(panel.generatedImages || [])];
     newImages.splice(imageIndex, 1);
-    updatePanel(panelId, 'generatedImages', newImages);
-    if (newImages.length === 0) {
-      updatePanel(panelId, 'status', 'idle');
-    }
+    updatePanelMultiple(panelId, {
+      generatedImages: newImages,
+      status: newImages.length === 0 ? 'idle' : panel.status
+    });
   };
 
   const [isAssociating, setIsAssociating] = useState<Record<string, boolean>>({});
@@ -251,7 +252,10 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
   return (
     <div className="max-w-[1800px] mx-auto p-6 space-y-8">
       <div className="flex justify-between items-center border-b border-gray-200 pb-4">
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">{t[lang].title}</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900 flex items-center">
+          {t[lang].title}
+          <span className="ml-3 text-xs font-mono text-gray-400 bg-gray-100 px-2 py-1 rounded-full align-middle">v1.0.2</span>
+        </h1>
         <div className="space-x-3 flex items-center">
           <button
             onClick={() => setIsSystemPromptModalOpen(true)}
@@ -310,7 +314,11 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
               {(panels || []).map((panel, index) => (
                 <tr key={panel.id} className="border-b border-gray-100 hover:bg-gray-50/50 group align-top">
                   {/* AI Generation Column */}
-                  <td className="p-3">
+                  <td 
+                    className="p-3"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => handleStoryboardDrop(e, panel.id)}
+                  >
                     <div className="space-y-3">
                       {(panel.generatedImages || []).length > 0 ? (
                         <div className="space-y-3">
@@ -372,13 +380,26 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
                               <><ImageIcon className="w-6 h-6 mb-2 group-hover/gen:scale-110 transition-transform" /> <span className="text-xs font-bold">{t[lang].generateImage}</span></>
                             )}
                           </button>
-                          <button
-                            onClick={() => handleUploadStoryboard(panel.id)}
-                            className="w-full py-2 text-gray-500 hover:text-indigo-600 text-[10px] font-medium flex items-center justify-center transition-colors"
+                          <label
+                            htmlFor={`upload-storyboard-${panel.id}`}
+                            className="w-full py-2 text-gray-500 hover:text-indigo-600 text-[10px] font-medium flex items-center justify-center transition-colors cursor-pointer"
                           >
                             <Upload className="w-3 h-3 mr-1" />
                             {t[lang].uploadStoryboard}
-                          </button>
+                          </label>
+                          <input 
+                            type="file" 
+                            id={`upload-storyboard-${panel.id}`}
+                            className="hidden" 
+                            accept="image/*" 
+                            multiple
+                            onChange={(e) => {
+                              if (e.target.files) {
+                                processStoryboardFiles(panel.id, Array.from(e.target.files));
+                                e.target.value = '';
+                              }
+                            }}
+                          />
                         </div>
                       )}
                       {panel.error && <div className="text-[10px] text-red-600 bg-red-50 p-2 rounded border border-red-100">{panel.error}</div>}
@@ -733,15 +754,6 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
           </div>
         </div>
       )}
-
-      <input 
-        type="file" 
-        ref={storyboardUploadRef} 
-        className="hidden" 
-        accept="image/*" 
-        multiple
-        onChange={onStoryboardFileChange} 
-      />
     </div>
   );
 }
