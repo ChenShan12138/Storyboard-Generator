@@ -85,7 +85,7 @@ export function StoryboardView({ panels, assets, categories, onBack, lang, onTog
                 <div key={asset.id} className="space-y-3">
                   <div className="aspect-[16/9] bg-gray-900 rounded overflow-hidden border border-gray-800">
                     {asset.images?.[0] ? (
-                      <BlobImage src={asset.images[0]} alt={asset.name} className="w-full h-full object-cover" />
+                      <BlobImage src={asset.images[0]} thumbnail={true} alt={asset.name} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-gray-700 text-xs uppercase tracking-tighter">NO IMAGE</div>
                     )}
@@ -136,6 +136,7 @@ export function StoryboardView({ panels, assets, categories, onBack, lang, onTog
                         <>
                           <BlobImage 
                             src={currentImageUrl} 
+                            thumbnail={true}
                             alt={`Shot ${pIdx + 1}`} 
                             className="w-full h-full object-cover"
                           />
@@ -171,7 +172,7 @@ export function StoryboardView({ panels, assets, categories, onBack, lang, onTog
                             return (
                               <div key={aIdx} className="w-8 h-8 rounded bg-gray-900 border border-gray-800 overflow-hidden" title={asset.name}>
                                 {assoc.image ? (
-                                  <BlobImage src={assoc.image} className="w-full h-full object-cover" />
+                                  <BlobImage src={assoc.image} thumbnail={true} className="w-full h-full object-cover" />
                                 ) : (
                                   <div className="w-full h-full flex items-center justify-center text-[6px] text-gray-600">?</div>
                                 )}

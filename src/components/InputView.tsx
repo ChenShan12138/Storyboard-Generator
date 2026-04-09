@@ -399,6 +399,7 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
                             <div key={imgIdx} className="relative group/img rounded-lg overflow-hidden border border-gray-200 shadow-sm aspect-[16/9] bg-gray-50">
                               <BlobImage 
                                 src={img} 
+                                thumbnail={true}
                                 alt={`Generated ${imgIdx}`} 
                                 className="w-full h-full object-cover cursor-pointer"
                                 onClick={() => setPreviewImage(img)}
@@ -524,7 +525,7 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
                           return (
                             <div key={idx} className="group/assoc relative w-12 h-12 bg-gray-100 rounded border border-gray-200 overflow-hidden shadow-sm">
                               {assoc.image ? (
-                                <BlobImage src={assoc.image} className="w-full h-full object-cover" />
+                                <BlobImage src={assoc.image} thumbnail={true} className="w-full h-full object-cover" />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center text-[8px] text-gray-400">NO IMG</div>
                               )}
@@ -587,7 +588,7 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
                                               className={`relative aspect-[4/3] rounded border-2 overflow-hidden cursor-pointer transition-all ${isSelected ? 'border-indigo-600 ring-2 ring-indigo-100' : 'border-gray-100 hover:border-gray-300'}`}
                                             >
                                               {asset.images?.[0] ? (
-                                                <BlobImage src={asset.images[0]} className="w-full h-full object-cover" />
+                                                <BlobImage src={asset.images[0]} thumbnail={true} className="w-full h-full object-cover" />
                                               ) : (
                                                 <div className="w-full h-full flex items-center justify-center bg-gray-50 text-[10px] text-gray-400">NO IMG</div>
                                               )}
@@ -614,7 +615,7 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
                                                     }}
                                                     className={`w-5 h-5 rounded-sm border overflow-hidden cursor-pointer ${selectedAssoc?.image === img ? 'border-indigo-600 ring-1 ring-indigo-600' : 'border-transparent opacity-50 hover:opacity-100'}`}
                                                   >
-                                                    <BlobImage src={img} className="w-full h-full object-cover" />
+                                                    <BlobImage src={img} thumbnail={true} className="w-full h-full object-cover" />
                                                   </div>
                                                 ))}
                                               </div>
@@ -644,7 +645,7 @@ export function InputView({ panels, setPanels, assets, setAssets, categories, sy
                       <div className="flex flex-wrap gap-2">
                         {(panel.referenceImages || []).map((img, idx) => (
                           <div key={idx} className="relative group w-12 h-12 bg-gray-100 rounded border border-gray-200 overflow-hidden shadow-sm">
-                            <BlobImage src={img} className="w-full h-full object-cover pointer-events-none" />
+                            <BlobImage src={img} thumbnail={true} className="w-full h-full object-cover pointer-events-none" />
                             <button onClick={() => removeReferenceImage(panel.id, idx)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                               <X className="w-2.5 h-2.5" />
                             </button>

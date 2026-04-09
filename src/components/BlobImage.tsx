@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 
 interface BlobImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   src: string;
+  thumbnail?: boolean;
 }
 
 // A cache to avoid recreating blobs for the same base64 string
 const blobCache = new Map<string, string>();
 
-export function BlobImage({ src, ...props }: BlobImageProps) {
+export function BlobImage({ src, thumbnail, ...props }: BlobImageProps) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -16,8 +17,12 @@ export function BlobImage({ src, ...props }: BlobImageProps) {
       return;
     }
 
-    if (src.startsWith('http') || src.startsWith('blob:')) {
-      setBlobUrl(src);
+    if (src.startsWith('http') || src.startsWith('/uploads/') || src.startsWith('blob:')) {
+      let finalSrc = src;
+      if (thumbnail && src.startsWith('/uploads/')) {
+        finalSrc = `${src}?thumb=true`;
+      }
+      setBlobUrl(finalSrc);
       return;
     }
 

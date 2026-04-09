@@ -304,7 +304,7 @@ export function AssetView({ assets, setAssets, categories, setCategories, lang }
                               <div className="flex flex-wrap gap-2">
                                 {(asset.images || []).map((img, imgIdx) => (
                                   <div key={imgIdx} className="relative w-24 h-16 bg-gray-100 rounded-md overflow-hidden group/img border border-gray-200 shadow-sm">
-                                    <BlobImage src={img} alt="Asset" className="w-full h-full object-cover" />
+                                    <BlobImage src={img} thumbnail={true} alt="Asset" className="w-full h-full object-cover" />
                                     <button 
                                       onClick={() => removeImage(asset.id, imgIdx)}
                                       className="absolute top-1 right-1 p-1 bg-white/90 rounded shadow-sm text-gray-600 hover:text-red-600 opacity-0 group-hover/img:opacity-100 transition-opacity"

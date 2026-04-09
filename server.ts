@@ -10,6 +10,7 @@ import fs from 'fs/promises';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
+import sharp from 'sharp';
 
 dotenv.config();
 
@@ -68,6 +69,40 @@ async function startServer() {
 
   app.use(express.json({ limit: '100mb' }));
   app.use(cookieParser());
+
+  app.get('/uploads/:filename', async (req, res, next) => {
+    const { filename } = req.params;
+    const isThumb = req.query.thumb === 'true';
+    const filePath = path.join(UPLOADS_DIR, filename);
+
+    try {
+      await fs.access(filePath);
+    } catch {
+      return next();
+    }
+
+    if (isThumb) {
+      const thumbPath = path.join(UPLOADS_DIR, `thumb_${filename}`);
+      try {
+        await fs.access(thumbPath);
+        return res.sendFile(thumbPath);
+      } catch {
+        try {
+          await sharp(filePath)
+            .resize({ width: 800, withoutEnlargement: true })
+            .jpeg({ quality: 80 })
+            .toFile(thumbPath);
+          return res.sendFile(thumbPath);
+        } catch (err) {
+          console.error('Thumbnail generation failed:', err);
+          return res.sendFile(filePath);
+        }
+      }
+    } else {
+      return res.sendFile(filePath);
+    }
+  });
+
   app.use('/uploads', express.static(UPLOADS_DIR));
 
   // Health check
